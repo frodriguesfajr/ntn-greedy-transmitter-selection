@@ -1,0 +1,16 @@
+*.asv
+*.autosave
+*~
+.DS_Store
+Thumbs.db
+**/position_cache/
+
+# MATLAB generated figure files
+*.fig
+
+# Propagation caches
+**/position_cache/
+
+# MATLAB temporary files
+*.asv
+*~

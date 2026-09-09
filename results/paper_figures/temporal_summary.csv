@@ -1,0 +1,2 @@
+NominalCandidates,NominalSelected,Target_m,FullBoundAtT0_m,SelectedBoundAtT0_m,FirstSampledAdaptiveSetChange_s,FirstSampledFixedTargetViolation_s,MinAdaptiveK,MaxAdaptiveK,NumberOfAdaptiveSetChanges,MaxPositionDifferenceAtT0_m,MaxCN0Calibration_dB
+26,12,0.6,0.495580716116543,0.583634461213701,10,30,11,15,13,6.10993106944345e-08,0.00221677811750709
