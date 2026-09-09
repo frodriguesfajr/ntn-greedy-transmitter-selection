@@ -14,3 +14,13 @@ Thumbs.db
 # MATLAB temporary files
 *.asv
 *~
+
+# Generated MATLAB intermediate results
+results/*.mat
+results/selection_necessity/*.mat
+results/MC_outliers/*.mat
+
+# Generated intermediate CSV files
+results/link_budget.csv
+results/HAPS_restrictions_summary.csv
+results/LEO_availability_summary.csv
