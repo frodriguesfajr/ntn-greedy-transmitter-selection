@@ -4,7 +4,7 @@ Reproducibility code for the manuscript:
 
 **On Positioning in Non-Terrestrial Networks: Greedy Algorithms for Optimizing Transmitter Allocation**
 
-This repository contains the MATLAB implementation used to reproduce the nominal NTN transmitter-selection experiments, HAPS-availability analysis, LEO-compensation analysis, robustness experiments, and paper figures.
+This repository contains the MATLAB implementation used to reproduce the nominal NTN transmitter-selection experiments, HAPS-availability analysis, LEO-compensation analysis, fixed-size selection-necessity experiment, robustness experiments, and paper figures.
 
 ## Main scenario
 
@@ -82,6 +82,10 @@ For the fixed scenario evaluated in the manuscript, the corresponding atmospheri
 data/atmospheric_gas_loss_reference.csv
 ```
 
+These values are treated as fixed reference inputs for the experiment, while all remaining link-budget quantities are recomputed by `build_link_budget.m`.
+
+This preserves the atmospheric-loss assumptions used in the original experiment while keeping the reproduction workflow transparent and deterministic.
+
 ## Repository structure
 
 ```text
@@ -96,6 +100,7 @@ ntn-greedy-transmitter-selection/
 |-- run_HAPS_restrictions.m
 |-- run_LEO_availability.m
 |-- run_MC_outliers.m
+|-- run_selection_necessity.m
 |-- generate_paper_figures.m
 |
 |-- setup_paths.m
@@ -114,7 +119,7 @@ Archived TLEs used in the experiments, organized by architecture and NORAD catal
 
 ### `data/`
 
-Fixed transparent input data, including the HAPS definition, nominal pool definition, and atmospheric gaseous-loss reference.
+Fixed input data, including the HAPS definition, nominal pool definition, and atmospheric gaseous-loss reference.
 
 ### `src/`
 
@@ -126,7 +131,7 @@ Validation scripts used to compare the Vallado implementation with independent r
 
 ### `results/`
 
-Generated numerical outputs and paper figures.
+Numerical outputs and paper figures retained for reproducibility and inspection. Regenerable intermediate MATLAB files are not required to be versioned.
 
 ## Running the reproduction
 
@@ -155,6 +160,7 @@ run_HAPS_restrictions
 run_LEO_availability
 
 run_MC_outliers
+run_selection_necessity
 
 generate_paper_figures
 ```
@@ -203,7 +209,7 @@ Selected pool indices:
 
 ## HAPS-availability experiment
 
-The nominal HAPS-restriction experiment considers maximum HAPS availability of 4, 2, and 0.
+The HAPS-restriction experiment considers maximum HAPS availability of 4, 2, and 0.
 
 Representative results are:
 
@@ -223,6 +229,54 @@ With no HAPS, the experiment increases the number of available LEO candidates wh
 | 12 | 20 | 0.595092 | Yes |
 | 16 | 20 | 0.595092 | Yes |
 | 20 | 20 | 0.595092 | Yes |
+
+## Fixed-size selection-necessity experiment
+
+`run_selection_necessity.m` evaluates whether the transmitter identities matter when the subset size is fixed.
+
+The experiment uses `K=12`, matching the subset size returned by FA and BE, and compares:
+
+- FA-selected subset
+- BE-selected subset
+- the 12 transmitters with the largest `C/N0`
+- the 12 transmitters with the largest elevation
+- 50,000 uniformly sampled random subsets of the same size
+
+The random experiment uses:
+
+```text
+Random subsets : 50000
+Subset size    : K = 12
+Target         : 0.6 m
+Random generator: rng(2,'twister')
+```
+
+Representative results are:
+
+| Method | K | Positional bound [m] | Target reached |
+|---|---:|---:|:---:|
+| FA selected | 12 | 0.583634 | Yes |
+| BE selected | 12 | 0.583634 | Yes |
+| Highest-C/N0 subset | 12 | 0.726835 | No |
+| Highest-elevation subset | 12 | 1.559634 | No |
+
+For the 50,000 random subsets:
+
+```text
+Random median bound                : 0.830169 m
+Random 5th / 95th percentile      : 0.667815 / 1.201139 m
+P(random bound <= 0.6 m)          : 0.0060 %
+P(random bound <= FA/BE bound)     : 0.0000 %
+FA/BE bound reduction vs. median  : 29.6969 %
+```
+
+The experiment therefore evaluates selection at a fixed number of measurements: it does not compare the 12-transmitter subset against the full 26-transmitter pool as if both represented the same resource constraint.
+
+The generated numerical outputs are stored under:
+
+```text
+results/selection_necessity/
+```
 
 ## Robustness experiment
 
@@ -250,11 +304,12 @@ results/MC_outliers/
 The main exported PDFs are:
 
 ```text
-fig4h_selection_visibility.pdf
-fig4h_time_sensitivity.pdf
-fig4h_haps_availability.pdf
-fig4h_leo_compensation.pdf
-fig4h_robustness.pdf
+selection_visibility.pdf
+time_sensitivity.pdf
+haps_availability.pdf
+leo_compensation.pdf
+robustness.pdf
+selection_necessity.pdf
 ```
 
 PNG versions are also generated.
@@ -285,7 +340,7 @@ The validation scripts are intentionally kept separate from the main reproductio
 
 Some scripts save `.mat` files as intermediate or detailed result files.
 
-These files are **outputs**, not hidden external dependencies. The main orbital catalog, candidate pool, and link-budget files can be regenerated by executing the corresponding build scripts.
+These files are outputs rather than hidden external dependencies. The orbital catalog, candidate pool, link budget, and experiment-specific MAT files can be regenerated by executing the corresponding scripts.
 
 ## Citation
 
