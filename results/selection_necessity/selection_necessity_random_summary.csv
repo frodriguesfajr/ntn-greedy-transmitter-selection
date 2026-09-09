@@ -1,0 +1,2 @@
+N_random,K,target_m,FullRankProb,TargetMetProb,RandomMeanBound_m,RandomMedianBound_m,RandomP05Bound_m,RandomP25Bound_m,RandomP75Bound_m,RandomP95Bound_m,RandomMinBound_m,RandomMaxBound_m,ProbRandomAtOrBelowFA,ProbRandomAtOrBelowBE,FAImprovementVsRandomMedian_pct,BEImprovementVsRandomMedian_pct
+50000,12,0.6,1,6e-05,0.866234179403395,0.83016873620836,0.667814944485633,0.74075208284542,0.949073411655843,1.20113888039876,0.599068634193106,2.52563463492015,0,0,29.6968874208238,29.6968874208239
