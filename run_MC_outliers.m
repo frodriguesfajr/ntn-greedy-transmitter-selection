@@ -1,133 +1,145 @@
-%% Monte Carlo with Gaussian-impulsive contamination and robust BE (v3)
+%% Monte Carlo with Gaussian-impulsive contamination and robust BE
 %
 % Objective:
 %   Evaluate the robustness of Backward Elimination (BE) under a
-%   DISTRIBUTION-CONTAMINATION MODEL, following the formulation
-%   adopted for the paper.
+%   Gaussian-impulsive pseudorange contamination model.
 %
-% MIXTURE / CONTAMINATION MODEL
-% --------------------------------
-% For pseudorange i, the nominal error is:
+% -------------------------------------------------------------------------
+% CONTAMINATION MODEL
+% -------------------------------------------------------------------------
 %
-%       n_i ~ N(0,sigma_i^2)
+% For pseudorange i, the nominal measurement error is
 %
-% In each Monte Carlo realization, exactly B measurements are randomly
-% selected to belong to the contaminated component. Define:
+%       n_i ~ N(0,sigma_i^2).
 %
-%       z_i = 1, if measurement i is contaminated
-%       z_i = 0, otherwise,
+% In each Monte Carlo realization, exactly B measurements are selected
+% uniformly at random without replacement to be contaminated. Let
 %
-% and the total error is:
+%       c_i = 1, if measurement i is contaminated,
+%       c_i = 0, otherwise.
 %
-%       e_i = n_i + z_i * o_i
+% The total pseudorange error is
 %
-% with impulsive component:
+%       e_i = n_i + c_i o_i,
 %
-%       o_i = s_i * alpha_i * sigma_i
+% where the impulsive component is
 %
-%       alpha_i ~ U(20,100)
-%       s_i in {-1,+1}.
+%       o_i = s_i alpha_i sigma_i,
 %
-% Therefore, the observed pseudorange is:
+%       alpha_i ~ U(20,100),
+%       s_i in {-1,+1},
 %
-%       rho_i = rho_i_true + n_i + z_i*o_i.
+% with symmetric impulse signs.
 %
-% In terms of the marginal distribution, this experiment can be
-% interpreted as a MIXTURE/CONTAMINATION MODEL:
+% Therefore, the observed pseudorange is
+%
+%       rho_i = rho_i,true + n_i + c_i o_i.
+%
+% Since exactly B of the N measurements are contaminated in each
+% realization, the marginal contamination probability for an individual
+% measurement is
+%
+%       epsilon = B/N.
+%
+% Accordingly, the marginal error distribution can be interpreted as
 %
 %       f_e(e) = (1-epsilon) f_G(e) + epsilon f_out(e),
 %
-% com:
+% where f_G is the nominal Gaussian component and f_out is the
+% distribution obtained by adding the Gaussian error to the symmetric
+% impulsive term defined above.
 %
-%       epsilon = B/N,
+% The contaminated component is therefore neither a Cauchy distribution
+% nor a second Gaussian distribution.
 %
-%       f_G      = nominal Gaussian component,
-%       f_out    = Gaussian component contaminated by a symmetric
-%                  impulse with magnitude U(20 sigma_i,100 sigma_i).
+% Important model assumptions:
 %
-% Therefore, the second component is NOT Cauchy and is NOT a second
-% Gaussian distribution. It is the impulsive component specified by the
-% MATLAB model adopted for this paper.
-%
-% IMPORTANT - model fidelity:
-%   - The impulse is ADDED to the Gaussian pseudorange realization.
-%   - The R matrix remains NOMINAL.
-%   - sigma_i in R is not increased when contamination occurs.
-%   - The algorithm knows B as a controlled simulation parameter,
-%     but does NOT know the contaminated indices.
-%   - Each sigma_i is obtained from the Scenario 4 clear-sky link budget.
+%   - The impulse is added to the nominal Gaussian pseudorange error.
+%   - The covariance matrix R remains nominal.
+%   - sigma_i is not increased when contamination occurs.
+%   - B is known as a controlled simulation parameter.
+%   - The contaminated measurement indices are unknown to the algorithm.
+%   - Each sigma_i is obtained from the validated clear-sky link budget.
 %
 % -------------------------------------------------------------------------
-% MODEL
+% ROBUST BACKWARD ELIMINATION
 % -------------------------------------------------------------------------
 %
-% Deterministic BE in Scenario 4d depends only on H and R; therefore,
-% it cannot directly observe an impulsive pseudorange realization.
+% The deterministic BE criterion depends only on geometry and measurement
+% covariance and therefore cannot directly identify impulsive errors from
+% a pseudorange realization.
 %
-% In this version, robustness to outliers is introduced through a
-% NORMALIZED-RESIDUAL elimination stage:
+% Robustness is introduced through a normalized-residual rejection stage:
 %
-%   1) Start with the full candidate pool.
-%   2) Estimate [x y z b]^T by WLS using nominal R.
-%   3) Compute the pseudorange residuals.
-%   4) Normalize the residuals using the residual covariance:
+%   1) Start from the full candidate pool.
+%   2) Estimate [x y z b]^T by WLS using the nominal covariance R.
+%   3) Compute the pseudorange residual vector v.
+%   4) Compute the residual covariance
 %
-%          Q_v = R - H (H'R^{-1}H)^{-1} H'
+%          Q_v = R - H (H' R^{-1} H)^{-1} H'.
 %
-%          z_i = |v_i| / sqrt(Q_v(i,i))
+%   5) For each retained measurement, compute the normalized residual
 %
-%   5) Remove the measurement with the largest z_i while preserving rank(H)=4.
-%   6) Repeat B times.
+%          r_i,norm = |v_i| / sqrt(Q_v(i,i)).
 %
-% In this version, B is known because it is a CONTROLLED PARAMETER
-% of the Monte Carlo simulation. The algorithm knows the value of B but
-% does NOT know which measurements were contaminated.
+%   6) Remove the measurement with the largest normalized residual while
+%      preserving rank(H)=4.
+%   7) Repeat the rejection step B times.
 %
-% After rejecting B measurements, the geometry/measurement-weighted BE
-% from Scenario 4d is applied to the remaining set, using the same target:
+% The algorithm knows B because it is a controlled Monte Carlo parameter,
+% but it does not know which measurements were contaminated.
 %
-%       B_pos <= 0.6 m
+% After B measurements have been rejected, the nominal
+% geometry/measurement-weighted BE procedure is applied to the remaining
+% set using the same positional-bound target:
 %
-% This explicitly separates:
+%       B_pos <= 0.6 m.
 %
-%   Phase A: outlier detection/removal using residuals;
-%   Phase B: subset-size reduction using the positional bound.
+% Thus, the robust procedure has two distinct stages:
 %
-% Future work may replace the known value B by a statistical threshold
-% applied to the normalized residuals.
+%   Phase A: residual-based outlier detection and rejection;
+%   Phase B: transmitter-set reduction based on the positional bound.
+%
+% Estimating the number of outliers from a statistical residual threshold
+% is outside the scope of this experiment.
 %
 % -------------------------------------------------------------------------
 % METRICS
 % -------------------------------------------------------------------------
 %
-% For each value of B:
-%   - RMSE of WLS without rejection (full pool);
-%   - RMSE after robust BE;
+% For each value of B, the simulation reports:
+%
+%   - position RMSE of full-pool WLS without rejection;
+%   - position RMSE after robust BE;
 %   - 95th and 99th percentiles of the position error;
-%   - operational probability P(e_pos <= target_m);
+%   - empirical probability P(e_pos <= target_m);
 %   - mean outlier-identification rate;
-%   - probability of identifying exactly the B contaminated indices;
+%   - exact-detection probability;
 %   - RMSE conditioned on exact detection;
 %   - RMSE conditioned on inexact detection;
 %   - mean final subset size;
 %   - mean positional bound of the final subset;
-%   - probability that the final subset satisfies the nominal BOUND.
+%   - probability that the final subset satisfies the nominal bound.
 %
-% IMPORTANT:
-%   BoundFeasibilityProb measures theoretical-bound feasibility after
-%   selection. It should not be confused with P(e_pos <= target_m), which is
-%   an empirical metric obtained directly from the Monte Carlo realizations.
+% BoundFeasibilityProb measures nominal positional-bound feasibility after
+% selection. It is distinct from P(e_pos <= target_m), which is measured
+% empirically from the Monte Carlo position errors.
 %
+% -------------------------------------------------------------------------
+% OUTPUTS
+% -------------------------------------------------------------------------
 %
+% results/MC_outliers/
 %
+%   MC_outliers_summary.csv
+%   MC_outliers_trials.csv
+%   MC_outliers_top10_errors.csv
+%   MC_outliers_results.mat
 %
-% Outputs:
-%   results_scenario4_BE_outliers_MC/
-%       scenario4e_MC_summary_v3.csv
-%       scenario4e_MC_trials_v3.csv
-%       scenario4e_MC_top10_errors_v3.csv
-%       scenario4e_MC_results_v3.mat
-
+% Reproducibility:
+%
+%   rng(2,'twister')
+%
 close all;
 clear;
 clc;
@@ -244,7 +256,7 @@ mu_gauss = 0;
 outlierLowerSigma = 20;
 outlierUpperSigma = 100;
 
-% Positional-bound target, consistent with Scenarios 4a-4d.
+% Positional-bound target used throughout the transmitter-selection experiments.
 target_m = 0.6;
 targetTol = 1e-12;
 
@@ -363,7 +375,7 @@ for ib = 1:nB
         % The impulsive-outlier generation used in this section is based on
         % MATLAB code provided by Prof. Apolinario and adapted here to the
         % heterogeneous pseudorange uncertainties sigma_i obtained from the
-        % Scenario 4 link budget. The adaptation preserves the original idea
+        % validated link budget. The adaptation preserves the original idea
         % of randomly selecting B contaminated measurements and adding
         % symmetric impulses with amplitudes between 20 and 100 times the
         % corresponding nominal sigma_i.
@@ -496,7 +508,7 @@ for ib = 1:nB
         %% --------- Phase B: BE using the positional bound -----------------
         %
         % After rejecting the B suspected indices, apply
-        % the Scenario 4d BE logic to the remaining pool.
+        % the nominal BE logic to the remaining pool.
 
         [selectedBE,boundBE,pdopBE,rankBE,targetBE] = ...
             backwardSelectByBound( ...
@@ -713,7 +725,7 @@ Tsummary = table( ...
 
 fprintf('\n');
 fprintf('============================================================\n');
-fprintf('MONTE CARLO SUMMARY - SCENARIO 4e\n');
+fprintf('MONTE CARLO SUMMARY - GAUSSIAN-IMPULSIVE CONTAMINATION\n');
 fprintf('============================================================\n');
 
 disp(' ');
@@ -830,20 +842,20 @@ end
 
 %% ##################### Figures ############################################
 % Figures are intentionally generated only by the final paper-output script.
-% Scenario 4e computes and saves the numerical Monte Carlo results only.
+% This script computes and saves the numerical Monte Carlo results only.
 
 %% ##################### Save outputs #####################################
 
 writetable(Ttrials, ...
-    fullfile(outDir,'scenario4e_MC_trials_v3.csv'));
+    fullfile(outDir,'MC_outliers_trials.csv'));
 
 writetable(Tsummary, ...
-    fullfile(outDir,'scenario4e_MC_summary_v3.csv'));
+    fullfile(outDir,'MC_outliers_summary.csv'));
 
 writetable(TopRows, ...
-    fullfile(outDir,'scenario4e_MC_top10_errors_v3.csv'));
+    fullfile(outDir,'MC_outliers_top10_errors.csv'));
 
-save(fullfile(outDir,'scenario4e_MC_results_v3.mat'), ...
+save(fullfile(outDir,'MC_outliers_results.mat'), ...
     'N_MC','B_values', ...
     'outlierLowerSigma','outlierUpperSigma', ...
     'target_m', ...
@@ -1002,7 +1014,7 @@ end
 
 function [selected,bound_m,pdop,rankH,targetReached] = ...
     backwardSelectByBound(initialSet,Hfull,sigmaRho_m,target_m,targetTol)
-% Deterministic Scenario 4d BE applied to an initial set that has already
+% Deterministic BE applied to an initial set that has already
 % passed through the outlier-rejection phase.
 
     selected = initialSet(:);
@@ -1076,7 +1088,7 @@ end
 
 function [bound_m,PDOP,rankH] = subsetMetrics( ...
     idx,Hfull,sigmaRho_m)
-% Same metric as in Scenario 4d:
+% Weighted positional metric used by the BE selection:
 %
 %   J = H'R^{-1}H
 %   B_pos = sqrt(trace(J^{-1}(1:3,1:3)))

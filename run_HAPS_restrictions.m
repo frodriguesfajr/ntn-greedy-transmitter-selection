@@ -5,14 +5,28 @@ format long;
 %% ============================================================
 % HAPS AVAILABILITY RESTRICTIONS
 %
+% Objective:
+%   Evaluate Forward Adding (FA) under explicit limits on the number
+%   of HAPS that may be used in the selected transmitter subset.
+%
 % Cases:
 %   maxHAPS = 4
 %   maxHAPS = 2
 %   maxHAPS = 0
 %
-% Same algorithm and target used in the paper.
-% Only change:
-%   orbital propagation -> Vallado SGP4 / WGS-72
+% The nominal 26-transmitter candidate pool and the validated link-budget
+% uncertainties are reused in all cases. The positional-bound target is
+% fixed at 0.6 m.
+%
+% The script reports, for each HAPS limit:
+%   - the largest admissible candidate set;
+%   - the best feasible four-transmitter initialization;
+%   - the FA selection trace;
+%   - the final positional bound, PDOP, subset size, and architecture mix.
+%
+% Outputs:
+%   results/HAPS_restrictions_results.mat
+%   results/HAPS_restrictions_summary.csv
 %% ============================================================
 
 rootDir = fileparts(mfilename('fullpath'));
@@ -524,7 +538,7 @@ for caseIdx = 1:nCases
 end
 
 %% ============================================================
-% Corrected comparison table
+% Summary table
 %% ============================================================
 
 Tcomparison = table( ...
@@ -570,8 +584,6 @@ fprintf('============================================================\n');
 
 disp(Tcomparison);
 
-%% ============================================================
-% Compare with old paper results
 %% ============================================================
 % Save
 %% ============================================================

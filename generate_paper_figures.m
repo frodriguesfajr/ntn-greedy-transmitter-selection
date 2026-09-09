@@ -1,36 +1,49 @@
 %% Paper figures - nominal geometry, availability, robustness, and short-term sensitivity
 %
-% This is the updated version of the former Scenario 4h figure script.
+% Objective:
+%   Generate the numerical short-term sensitivity result and the separate
+%   figures used in the manuscript.
 %
-% It produces five SEPARATE paper figures:
+% The script produces five independent paper figures:
 %   1) nominal selection skyplot;
 %   2) 3-minute temporal sensitivity;
 %   3) HAPS availability;
 %   4) LEO compensation;
-%   5) impulsive-outlier robustness.
+%   5) Gaussian-impulsive robustness.
 %
-% The figures are intentionally exported as separate files. Their placement
-% (including side-by-side layout and subfigure labels) is left to LaTeX.
+% The figures are intentionally exported as separate files so that their
+% placement, side-by-side arrangement, and subfigure labels can be
+% controlled directly in LaTeX.
 %
-% Current repository inputs:
+% Inputs:
 %   results/candidate_pool_26.csv
 %   results/link_budget.csv
 %   results/BE_selected.csv
 %   results/BE_results.mat
 %   results/HAPS_restrictions_summary.csv
 %   results/LEO_availability_summary.csv
-%   results/MC_outliers/scenario4e_MC_summary_v3.csv
+%   results/MC_outliers/MC_outliers_summary.csv
 %   tle/<architecture>/<NORAD>/<NORAD>.tle
 %
-% Orbital positions in the 180-s temporal experiment are propagated directly
-% from the archived TLEs with the included Vallado SGP4 implementation.
+% Orbital positions in the 180-s temporal experiment are propagated from
+% the archived TLEs using the included Vallado SGP4 implementation with
+% WGS-72 constants.
 %
-% No Aerospace Toolbox.
-% No Satellite Communications Toolbox.
+% The 180-s interval is intentionally short so that the experiment isolates
+% geometry and link-quality evolution while retaining the same nominal
+% transmitter identities.
 %
-% The 180-s window is deliberate: it isolates short-term geometry/link
-% evolution while retaining the same nominal 26 transmitter identities.
-
+% Numerical outputs:
+%   results/paper_figures/temporal_sensitivity.csv
+%   results/paper_figures/temporal_summary.csv
+%
+% Figure outputs:
+%   results/paper_figures/selection_visibility.pdf
+%   results/paper_figures/time_sensitivity.pdf
+%   results/paper_figures/haps_availability.pdf
+%   results/paper_figures/leo_compensation.pdf
+%   results/paper_figures/robustness.pdf
+%
 close all;
 clear;
 clc;
@@ -64,7 +77,7 @@ leoCompensationCsv = fullfile( ...
     rootDir,"results","LEO_availability_summary.csv");
 
 outlierResultsCsv = fullfile( ...
-    rootDir,"results","MC_outliers","scenario4e_MC_summary_v3.csv");
+    rootDir,"results","MC_outliers","MC_outliers_summary.csv");
 
 outDir = fullfile(rootDir,"results","paper_figures");
 
@@ -82,7 +95,7 @@ if ~exist(outDir,'dir')
     mkdir(outDir);
 end
 
-%% ##################### Load validated results ###########################
+%% ##################### Load input results ###############################
 
 Tpool = readtable(candidateCsv,'TextType','string');
 Tlink = readtable(linkBudgetCsv,'TextType','string');
@@ -152,7 +165,7 @@ end
 selectedT0 = find(ismember(Label,string(Tbe.Label(:))));
 
 if numel(selectedT0) ~= 12
-    error("Expected 12 transmitters in the validated nominal BE subset.");
+    error("Expected 12 transmitters in the nominal BE subset.");
 end
 
 if isfield(BE,'finalBound')
@@ -160,7 +173,7 @@ if isfield(BE,'finalBound')
 elseif isfield(BE,'finalBound_m')
     expectedBoundT0_m = double(BE.finalBound_m);
 else
-    error("BE_results.mat does not contain finalBound or finalBound_m.");
+    error("BE_results.mat does not contain the expected final-bound variable.");
 end
 
 target_m = double(cfg.selectionTarget_m);
@@ -281,7 +294,7 @@ for aidx = 1:numel(archList)
 end
 
 % Per-link numerical calibration makes t0 C/N0 exactly equal to the
-% validated link-budget values. Dynamic changes still come from range,
+% stored link-budget values. Dynamic changes still come from range,
 % elevation, gaseous loss, and LEO elevation-dependent EIRP.
 [~,~,~,rawCN0T0_dBHz] = epochGeometryAndQuality( ...
     positionAtT0E,Architecture,UserPositionECEF,cfg, ...
@@ -359,7 +372,7 @@ end
 
 if abs(AdaptiveBound_m(1)-expectedBoundT0_m) > 1e-9
     error([ ...
-        "The t0 BE bound (%.12f m) differs from the validated value " ...
+        "The t0 BE bound (%.12f m) differs from the nominal value " ...
         "(%.12f m)."], ...
         AdaptiveBound_m(1),expectedBoundT0_m);
 end
@@ -367,7 +380,7 @@ end
 adaptiveT0 = split(AdaptiveLabels(1),";");
 
 if ~isequal(adaptiveT0(:),Label(selectedT0))
-    error("Temporal BE does not reproduce the validated t0 subset.");
+    error("Temporal BE does not reproduce the nominal t0 subset.");
 end
 
 firstFixedViolationIdx = find( ...
@@ -427,12 +440,12 @@ writetable(Tsummary, ...
 % The intended final width is approximately half of one ICASSP column.
 % LaTeX should control side-by-side placement and (a)/(b)/(c) labels.
 %
-% Example final files:
-%   fig4h_selection_visibility.pdf
-%   fig4h_time_sensitivity.pdf
-%   fig4h_haps_availability.pdf
-%   fig4h_leo_compensation.pdf
-%   fig4h_robustness.pdf
+% Final figure files:
+%   selection_visibility.pdf
+%   time_sensitivity.pdf
+%   haps_availability.pdf
+%   leo_compensation.pdf
+%   robustness.pdf
 
 halfColumnWidth_in = 1.68;
 
@@ -585,7 +598,7 @@ set( ...
 set(pax,'Position',skyPos);
 
 exportFigurePair( ...
-    fig,outDir,"fig4h_selection_visibility");
+    fig,outDir,"selection_visibility");
 
 
 %% ----------------------------------------------------------------------
@@ -691,7 +704,7 @@ timeLegend.ItemTokenSize = [8 6];
 set(ax,'Position',timePos);
 
 exportFigurePair( ...
-    fig,outDir,"fig4h_time_sensitivity");
+    fig,outDir,"time_sensitivity");
 
 
 %% ----------------------------------------------------------------------
@@ -831,7 +844,7 @@ set( ...
 set(axHaps,'Position',hapsPos);
 
 exportFigurePair( ...
-    fig,outDir,"fig4h_haps_availability");
+    fig,outDir,"haps_availability");
 
 
 %% ----------------------------------------------------------------------
@@ -914,7 +927,7 @@ leoLegend.ItemTokenSize = [7 5];
 set(axLeo,'Position',leoPos);
 
 exportFigurePair( ...
-    fig,outDir,"fig4h_leo_compensation");
+    fig,outDir,"leo_compensation");
 
 
 %% ----------------------------------------------------------------------
@@ -1015,7 +1028,7 @@ outlierLegend.ItemTokenSize = [7 5];
 set(axOutlier,'Position',outlierPos);
 
 exportFigurePair( ...
-    fig,outDir,"fig4h_robustness");
+    fig,outDir,"robustness");
 
 fprintf('\nSeparate paper figures saved in:\n  %s\n',outDir);
 fprintf('LaTeX should control side-by-side placement and panel labels.\n');
@@ -1025,11 +1038,11 @@ fprintf('LaTeX should control side-by-side placement and panel labels.\n');
 
 fprintf('\n');
 fprintf('============================================================\n');
-fprintf('SCENARIO 4h - GEOMETRY AND TEMPORAL SENSITIVITY\n');
+fprintf('PAPER FIGURES - GEOMETRY AND TEMPORAL SENSITIVITY\n');
 fprintf('============================================================\n');
 fprintf('Nominal candidates                 : %d\n',Npool);
 fprintf('Nominal selected subset            : %d\n',numel(selectedT0));
-fprintf('Validated selected bound at t0     : %.12f m\n', ...
+fprintf('Selected bound at t0               : %.12f m\n', ...
     AdaptiveBound_m(1));
 fprintf('First sampled adaptive-set change  : %.0f s\n', ...
     firstAdaptiveChange_s);
@@ -1046,7 +1059,7 @@ fprintf('Results saved to:\n  %s\n',outDir);
 
 
 function cfg = paperFigureConfig(rootDir)
-% Fixed configuration for the paper figures.
+% Fixed configuration used by the paper-figure calculations.
 
     cfg.analysisTimeUTC = datetime( ...
         2026,8,1,12,0,0,'TimeZone','UTC');
@@ -1347,42 +1360,6 @@ function fig = paperFigure(figureName,width_in,height_in)
         'PaperPositionMode','manual','InvertHardcopy','off');
     % Preserve the intended print dimensions if the popup is later resized.
     setappdata(fig,'PaperSizeInches',[width_in height_in]);
-end
-
-function drawCompactArchitectureKey(ax,labels,colors,fontName,fontSize)
-    % Two columns with fixed physical spacing, entirely inside the HAPS axes.
-    % Call after setting the limits, with the right yyaxis side active.
-    originalUnits = ax.Units;
-    ax.Units = 'points';
-    axesSize_pt = ax.Position(3:4);
-    ax.Units = originalUnits;
-
-    xLimits = ax.XLim;
-    yLimits = ax.YLim;
-    columnLeft_pt = [1.4 16.0];
-    rowTop_pt = [8.0 14.0];
-    squareSize_pt = 2.3;
-    labelGap_pt = 0.7;
-
-    for k = 1:4
-        col = ceil(k/2);
-        row = mod(k-1,2)+1;
-        xLeft = columnLeft_pt(col)/axesSize_pt(1);
-        yCenter = 1-rowTop_pt(row)/axesSize_pt(2);
-        width = squareSize_pt/axesSize_pt(1);
-        height = squareSize_pt/axesSize_pt(2);
-        rectangle(ax,'Position',[ ...
-            xLimits(1)+diff(xLimits)*xLeft, ...
-            yLimits(1)+diff(yLimits)*(yCenter-height/2), ...
-            diff(xLimits)*width,diff(yLimits)*height], ...
-            'FaceColor',colors(k,:),'EdgeColor','k','LineWidth',0.35, ...
-            'Clipping','on','HandleVisibility','off');
-        xLabel = (columnLeft_pt(col)+squareSize_pt+labelGap_pt)/axesSize_pt(1);
-        text(ax,xLabel,yCenter,labels{k},'Units','normalized', ...
-            'FontName',fontName,'FontUnits','points','FontSize',fontSize, ...
-            'HorizontalAlignment','left','VerticalAlignment','middle', ...
-            'Interpreter','none','Clipping','on','HandleVisibility','off');
-    end
 end
 
 function ax = paperAxes(fig,axesPosition,fontName,fontSize)

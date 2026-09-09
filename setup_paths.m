@@ -1,5 +1,12 @@
 function setup_paths()
-%SETUP_PATHS Configure paths for the reproducibility package.
+% SETUP_PATHS Configure repository paths required by the MATLAB scripts.
+%
+% The function adds the project source directory and the included Vallado
+% SGP4 routines to the beginning of the MATLAB search path.
+%
+% Required directories:
+%   src/
+%   third_party/vallado_sgp4/
 
 rootDir = fileparts(mfilename('fullpath'));
 
@@ -11,7 +18,7 @@ if ~isfolder(srcDir)
 end
 
 if ~isfolder(valladoDir)
-    error('Vallado directory not found: %s',valladoDir);
+    error('Vallado SGP4 directory not found: %s',valladoDir);
 end
 
 addpath(srcDir,'-begin');

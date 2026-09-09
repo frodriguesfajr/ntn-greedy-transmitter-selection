@@ -2,28 +2,35 @@ clear;
 clc;
 
 %% ============================================================
-%  BUILD ORBITAL CATALOG - VALLADO SGP4
+% BUILD ORBITAL CATALOG
 %
-%  Corrected orbital propagation for the paper
+% Objective:
+%   Propagate the archived orbital TLEs to the reference epoch and build
+%   the complete LEO/MEO/GEO catalog used by the positioning experiments.
 %
-%  Epoch:
-%    01-Aug-2026 12:00:00 UTC
+% Reference epoch:
+%   01-Aug-2026 12:00:00 UTC
 %
-%  Orbital catalog:
-%    20 LEO
-%     7 MEO
-%     7 GEO
+% Orbital catalog:
+%   20 LEO
+%    7 MEO
+%    7 GEO
 %
-%  Propagation:
-%    Vallado SGP4
-%    WGS-72
+% Propagation:
+%   Vallado SGP4 with WGS-72 constants.
 %
-%  TEME -> ECEF:
-%    Vallado transformation with fixed IERS EOP
+% Reference-frame conversion:
+%   TEME -> ECEF using the Vallado transformation and the fixed
+%   Earth-orientation parameters defined in src/paper_epoch_eop.m.
 %
-%  No Aerospace Toolbox or Satellite Communications Toolbox
-%  required.
-% =============================================================
+% For each orbital object, the script stores the propagated TEME/ECEF
+% state, user-relative azimuth/elevation/range, visibility flag, LOS unit
+% vector, TLE age, and SGP4 status.
+%
+% Outputs:
+%   results/orbital_catalog.mat
+%   results/orbital_catalog.csv
+%% =============================================================
 
 %% Repository root
 
@@ -36,7 +43,7 @@ end
 cd(rootDir);
 
 fprintf('\n============================================================\n');
-fprintf('BUILD ORBITAL CATALOG - VALLADO SGP4\n');
+fprintf('BUILD ORBITAL CATALOG\n');
 fprintf('============================================================\n');
 fprintf('Repository:\n%s\n',rootDir);
 
@@ -106,7 +113,7 @@ fprintf('Z = %.3f\n',UserPositionECEF(3));
 
 architectures = ["LEO","MEO","GEO"];
 
-% Orbital transmitter elevation mask used in the paper
+% Orbital-transmitter elevation mask used in the experiment
 orbitalMask_deg = 5.0;
 
 expectedCounts.LEO = 20;
@@ -251,7 +258,7 @@ for a = 1:numel(architectures)
         NORAD_CAT_ID(end+1,1) = noradText;
         ObjectName(end+1,1)   = string(V.name);
 
-        % Save relative path so repository is portable
+        % Save the repository-relative TLE path
         TLEFile(end+1,1) = string(fullfile( ...
             'tle', ...
             char(arch), ...
@@ -446,12 +453,12 @@ fprintf('\nMAT file:\n%s\n',matFile);
 fprintf('\nCSV file:\n%s\n',csvFile);
 
 fprintf('\n============================================================\n');
-fprintf('CORRECTED ORBITAL CATALOG COMPLETED\n');
+fprintf('ORBITAL CATALOG COMPLETED\n');
 fprintf('============================================================\n');
 
 
 %% ============================================================
-% Local function: geodetic -> ECEF, WGS-84
+% Local function: geodetic coordinates -> ECEF (WGS-84)
 % =============================================================
 
 function rECEF_m = ...
@@ -480,7 +487,7 @@ end
 
 
 %% ============================================================
-% Local function: ECEF geometry
+% Local function: user-relative ECEF geometry
 % =============================================================
 
 function [az_deg,el_deg,range_m,uLOS] = ...

@@ -5,24 +5,35 @@ format long;
 %% ============================================================
 % FORWARD ADDING (FA)
 %
+% Objective:
+%   Apply Forward Adding (FA) to the nominal 26-transmitter candidate
+%   pool and determine a small transmitter subset that satisfies the
+%   prescribed positional-bound target.
 %
-%   FSPL_i -> C/N0_i -> sigma_rho_i -> R -> positional bound
+% The measurement-quality chain is
+%
+%   FSPL_i -> C/N0_i -> sigma_rho_i -> R -> positional bound.
 %
 % Ranging-signal assumptions:
-%   beta   = 1.023 MHz (GNSS-like)
+%   beta   = 1.023 MHz
 %   Tcoh   = 20 ms
-%   etaPos = 0.01, fraction of link power allocated to the positioning signal
-%            (1%, equivalent to -20 dB), common to all architectures
+%   etaPos = 0.01, fraction of link power allocated to the positioning
+%            signal (1%, equivalent to -20 dB), common to all architectures.
 %
-% Selection:
-%   1) exhaustive search for the best initial 4-transmitter subset;
-%   2) Forward Adding (FA): add the candidate that minimizes the
+% Selection procedure:
+%   1) exhaustively evaluate all full-rank four-transmitter subsets;
+%   2) initialize FA with the subset having the smallest positional bound;
+%   3) at each iteration, add the remaining candidate that minimizes the
 %      positional bound;
-%   3) stop when the positional bound reaches the 0.6 m target or no candidates remain.
+%   4) stop when the positional bound reaches 0.6 m or no candidate remains.
 %
-% Note:
-%   Geometry is obtained from the candidate pool, while nominal
-%   measurement quality is read exclusively from the link-budget file.
+% Geometry is read from the candidate-pool file, while nominal
+% measurement quality is read from the link-budget file.
+%
+% Outputs:
+%   results/FA_results.mat
+%   results/FA_selected.csv
+%   results/FA_trace.csv
 %% ============================================================
 
 rootDir = fileparts(mfilename('fullpath'));
@@ -35,7 +46,7 @@ cd(rootDir);
 setup_paths;
 
 fprintf('\n============================================================\n');
-fprintf('FORWARD ADDING - FA GEOMETRY\n');
+fprintf('FORWARD ADDING\n');
 fprintf('============================================================\n');
 
 %% ============================================================
@@ -193,7 +204,7 @@ end
 
 u = r ./ d;
 
-% Exact convention used in scenario4a_FA.m
+% Geometry-matrix convention used by the selection algorithm
 Hfull = [ ...
     -u, ...
     ones(Npool,1)];
@@ -428,7 +439,7 @@ while currentBound > target_m && ...
 end
 
 %% ============================================================
-% Final corrected result
+% Final result
 %% ============================================================
 
 [finalBound,finalPDOP,finalRankH] = ...
@@ -511,7 +522,7 @@ Ttrace = table( ...
     'AddedArchitecture', ...
     'PositionalBound_m'});
 %% ============================================================
-% Save corrected result
+% Save results
 %% ============================================================
 
 resultsDir = fullfile( ...
@@ -577,7 +588,7 @@ fprintf('============================================================\n');
 
 
 %% ============================================================
-% Local function: subset metrics
+% Local weighted positional metric
 %% ============================================================
 
 function [bound_m,PDOP,rankH] = ...

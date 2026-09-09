@@ -3,25 +3,37 @@ clc;
 format long;
 
 %% ============================================================
-% NO-HAPS LEO AVAILABILITY
+% NO-HAPS LEO AVAILABILITY AND COMPENSATION
+%
+% Objective:
+%   Evaluate whether increasing the number of available LEO candidates
+%   can compensate for the absence of HAPS while preserving the
+%   transmitter-selection target.
 %
 % Cases:
 %   8, 12, 16, and 20 available LEO candidates
 %
-% Fixed:
+% Fixed in every case:
 %   7 MEO
 %   7 GEO
 %   no HAPS
 %
-% Target:
-%   positional bound <= 0.6 m
+% The LEO sets are nested according to the predefined experiment ordering.
+% Orbital geometry is obtained from the archived TLEs using the included
+% Vallado SGP4 implementation with WGS-72 constants.
 %
-% Orbital geometry:
-%   generated from TLEs using Vallado SGP4 / WGS-72
+% The atmospheric gaseous-loss values for the fixed experiment are read
+% from:
 %
-% Atmospheric gas loss:
-%   read from data/atmospheric_gas_loss_reference.csv
+%   data/atmospheric_gas_loss_reference.csv
 %
+% For each case, the script evaluates the full candidate set and then
+% applies Forward Adding (FA) from the best full-rank four-transmitter
+% initialization whenever the 0.6 m positional-bound target is feasible.
+%
+% Outputs:
+%   results/LEO_availability_results.mat
+%   results/LEO_availability_summary.csv
 %% ============================================================
 
 rootDir = fileparts(mfilename('fullpath'));
@@ -61,7 +73,7 @@ assert(isfile(gasReferenceFile), ...
     gasReferenceFile);
 
 %% ============================================================
-% Load corrected orbital catalog
+% Load orbital catalog
 %% ============================================================
 
 S = load(catalogFile);
@@ -114,7 +126,7 @@ Tgas.NORAD_CAT_ID = ...
     string(Tgas.NORAD_CAT_ID);
 
 %% ============================================================
-% Exact orbital ordering used in the paper
+% Orbital ordering used in the experiment
 %% ============================================================
 
 leoOrder = [ ...
@@ -636,7 +648,7 @@ fprintf('\nSaved:\n%s\n%s\n', ...
     matFile,csvFile);
 
 %% ============================================================
-% Reorder architecture according to the paper catalog
+% Reorder architecture according to the experiment catalog
 %% ============================================================
 
 function Tout = reorderArchitecture( ...

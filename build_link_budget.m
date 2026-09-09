@@ -2,21 +2,38 @@ clear;
 clc;
 
 %% ============================================================
-% BUILD LINK BUDGET - CORRECTED VALLADO CANDIDATE POOL
+% BUILD LINK BUDGET
 %
-% Geometry:
-%   Corrected Vallado SGP4 / WGS-72 orbital states
+% Objective:
+%   Compute the nominal measurement-quality parameters used by the
+%   transmitter-selection experiments for the 26-transmitter candidate pool.
 %
-% Link-budget model:
-%   Identical to the original paper implementation
+% The link-budget chain is
 %
-% Atmospheric loss:
-%   ITU-R P.618/P.676 using Satellite Communications Toolbox
+%   architecture parameters
+%      -> free-space path loss
+%      -> atmospheric gaseous attenuation
+%      -> positioning-signal EIRP
+%      -> C/N0
+%      -> pseudorange standard deviation.
 %
-% Purpose:
-%   Recompute the paper results after correcting orbital
-%   propagation, without changing the RF assumptions.
-% =============================================================
+% Clear-sky gaseous attenuation is based on the ITU-R P.618/P.676 model.
+% For the fixed experiment geometry, the corresponding validated values are
+% read from:
+%
+%   data/atmospheric_gas_loss_reference.csv
+%
+% All remaining link-budget quantities are recomputed by this script.
+%
+% Ranging parameters:
+%   beta   = 1.023 MHz
+%   Tcoh   = 20 ms
+%   etaPos = 0.01
+%
+% Outputs:
+%   results/link_budget.mat
+%   results/link_budget.csv
+%% ============================================================
 
 rootDir = fileparts(mfilename('fullpath'));
 
@@ -28,57 +45,168 @@ cd(rootDir);
 setup_paths;
 
 fprintf('\n============================================================\n');
-fprintf('BUILD LINK BUDGET - VALLADO CORRECTED POOL\n');
+fprintf('BUILD LINK BUDGET\n');
 fprintf('============================================================\n');
 
 %% ============================================================
-% Check required MATLAB functions
-% =============================================================
-
-assert(exist('p618Config','file') ~= 0, ...
-    'p618Config is not available.');
-
-assert(exist('p618PropagationLosses','file') ~= 0, ...
-    'p618PropagationLosses is not available.');
-
+% Input files
 %% ============================================================
-% Load corrected 26-Tx pool
-% =============================================================
 
 poolFile = fullfile( ...
     rootDir, ...
     'results', ...
     'candidate_pool_26.mat');
 
+gasReferenceFile = fullfile( ...
+    rootDir, ...
+    'data', ...
+    'atmospheric_gas_loss_reference.csv');
+
 assert(isfile(poolFile), ...
-    'Corrected candidate pool not found:\n%s',poolFile);
+    'Candidate pool not found:\n%s\nRun build_candidate_pool.m first.', ...
+    poolFile);
+
+assert(isfile(gasReferenceFile), ...
+    'Atmospheric-loss reference not found:\n%s', ...
+    gasReferenceFile);
+
+%% ============================================================
+% Candidate pool
+%% ============================================================
 
 P = load(poolFile);
 
+assert(isfield(P,'Tpool') && istable(P.Tpool), ...
+    'candidate_pool_26.mat must contain table Tpool.');
+
 Tpool = P.Tpool;
 
-analysisTimeUTC = P.analysisTimeUTC;
+requiredPoolVars = { ...
+    'PoolIndex', ...
+    'Label', ...
+    'Architecture', ...
+    'NORAD_CAT_ID', ...
+    'ObjectName', ...
+    'Elevation_deg', ...
+    'SlantRange_km'};
 
-userLat_deg = P.userLat_deg;
-userLon_deg = P.userLon_deg;
-userH_m     = P.userH_m;
+for k = 1:numel(requiredPoolVars)
+
+    assert(ismember( ...
+        requiredPoolVars{k}, ...
+        Tpool.Properties.VariableNames), ...
+        'Missing candidate-pool variable: %s', ...
+        requiredPoolVars{k});
+
+end
 
 Npool = height(Tpool);
 
 assert(Npool == 26, ...
-    'Expected 26 transmitters.');
+    'Expected 26 transmitters; found %d.',Npool);
 
-Label        = string(Tpool.Label);
-Architecture = string(Tpool.Architecture);
-NORAD        = string(Tpool.NORAD_CAT_ID);
-ObjectName   = string(Tpool.ObjectName);
+PoolIndex   = Tpool.PoolIndex(:);
+Label       = string(Tpool.Label(:));
+Architecture = string(Tpool.Architecture(:));
+NORAD       = string(Tpool.NORAD_CAT_ID(:));
+ObjectName  = string(Tpool.ObjectName(:));
 
-Elevation_deg = Tpool.Elevation_deg;
-SlantRange_m  = 1000*Tpool.SlantRange_km;
+Elevation_deg = double(Tpool.Elevation_deg(:));
+SlantRange_km = double(Tpool.SlantRange_km(:));
+SlantRange_m  = 1000*SlantRange_km;
+
+if isfield(P,'analysisTimeUTC')
+    analysisTimeUTC = P.analysisTimeUTC;
+else
+    analysisTimeUTC = datetime( ...
+        2026,8,1,12,0,0, ...
+        'TimeZone','UTC');
+end
+
+if isfield(P,'userLat_deg')
+    userLat_deg = P.userLat_deg;
+else
+    userLat_deg = -22.8596582;
+end
+
+if isfield(P,'userLon_deg')
+    userLon_deg = P.userLon_deg;
+else
+    userLon_deg = -43.2303236;
+end
+
+if isfield(P,'userH_m')
+    userH_m = P.userH_m;
+else
+    userH_m = 10.0;
+end
+
+%% ============================================================
+% Atmospheric gaseous-loss reference
+%% ============================================================
+
+Tgas = readtable( ...
+    gasReferenceFile, ...
+    'TextType','string');
+
+requiredGasVars = { ...
+    'Architecture', ...
+    'Label', ...
+    'NORAD_CAT_ID', ...
+    'AtmosphericGasLoss_dB'};
+
+for k = 1:numel(requiredGasVars)
+
+    assert(ismember( ...
+        requiredGasVars{k}, ...
+        Tgas.Properties.VariableNames), ...
+        'Missing atmospheric-reference variable: %s', ...
+        requiredGasVars{k});
+
+end
+
+Tgas.Architecture = string(Tgas.Architecture);
+Tgas.Label = string(Tgas.Label);
+Tgas.NORAD_CAT_ID = string(Tgas.NORAD_CAT_ID);
+
+AtmosphericGasLoss_dB = nan(Npool,1);
+
+for i = 1:Npool
+
+    if Architecture(i) == "HAPS"
+
+        idxGas = ...
+            Tgas.Architecture == "HAPS" & ...
+            Tgas.Label == Label(i);
+
+    else
+
+        idxGas = ...
+            Tgas.Architecture == Architecture(i) & ...
+            Tgas.NORAD_CAT_ID == NORAD(i);
+
+    end
+
+    if sum(idxGas) ~= 1
+
+        error([ ...
+            'Atmospheric-loss reference not uniquely found for ' ...
+            '%s | %s | NORAD=%s.'], ...
+            Label(i),Architecture(i),NORAD(i));
+
+    end
+
+    AtmosphericGasLoss_dB(i) = ...
+        double(Tgas.AtmosphericGasLoss_dB(idxGas));
+
+end
+
+assert(all(isfinite(AtmosphericGasLoss_dB)));
+assert(all(AtmosphericGasLoss_dB >= 0));
 
 %% ============================================================
 % Ranging parameters
-% =============================================================
+%% ============================================================
 
 c_mps  = 299792458;
 beta   = 1.023e6;
@@ -88,27 +216,22 @@ etaPos = 0.01;
 Branging_Hz  = beta;
 Branging_MHz = beta/1e6;
 
-%% ============================================================
-% Propagation parameters
-% =============================================================
-
 GasAnnualExceedance_pct = 50.0;
 
 PropagationModel = ...
-    "free-space + ITU-R P.618/P.676 median clear-sky gaseous attenuation";
+    "free-space + fixed ITU-R P.618/P.676 clear-sky gaseous attenuation reference";
 
 %% ============================================================
 % RF architecture parameters
-% =============================================================
+%% ============================================================
 
 % HAPS
-HAPS_Frequency_GHz       = 31.15;
-HAPS_EIRP_PSD_dBW_MHz    = -9.1;
-HAPS_ReceiverFoM_dBK     = 12.3;
+HAPS_Frequency_GHz    = 31.15;
+HAPS_EIRP_PSD_dBW_MHz = -9.1;
+HAPS_ReceiverFoM_dBK  = 12.3;
 
-% LEO / Starlink
+% LEO
 LEO_Frequency_GHz = 20.0;
-
 LEO_ReceiverFoM_dBK = 10.5;
 
 LEO_ElevationControl_deg = [ ...
@@ -121,7 +244,7 @@ LEO_EIRP_Control_dBW_MHz = [ ...
     17.9;
     11.3];
 
-% MEO / O3b mPOWER
+% MEO
 MEO_Frequency_GHz = 20.0;
 EIRP_MEO_total_dBW = 49.7;
 BW_MEO_MHz = 100;
@@ -135,23 +258,22 @@ G_rx_GEO_dBi = 44.5;
 Tsys_GEO_K = 250;
 
 %% ============================================================
-% Allocate arrays
-% =============================================================
+% Architecture-dependent quantities
+%% ============================================================
 
 Frequency_GHz = nan(Npool,1);
 EIRP_PSD_dBW_MHz = nan(Npool,1);
 ReceiverFoM_dBK = nan(Npool,1);
 
 ParameterSource = strings(Npool,1);
-ReceiverChain   = strings(Npool,1);
+ReceiverChain = strings(Npool,1);
 
-%% ============================================================
-% HAPS
-% =============================================================
+%% HAPS
 
 idx = Architecture == "HAPS";
 
-Frequency_GHz(idx) = HAPS_Frequency_GHz;
+Frequency_GHz(idx) = ...
+    HAPS_Frequency_GHz;
 
 EIRP_PSD_dBW_MHz(idx) = ...
     HAPS_EIRP_PSD_dBW_MHz;
@@ -165,22 +287,21 @@ ParameterSource(idx) = ...
 ReceiverChain(idx) = ...
     "HAPS reference CPE";
 
-%% ============================================================
-% LEO
-% =============================================================
+%% LEO
 
 idx = Architecture == "LEO";
 
-Frequency_GHz(idx) = LEO_Frequency_GHz;
+Frequency_GHz(idx) = ...
+    LEO_Frequency_GHz;
 
 ReceiverFoM_dBK(idx) = ...
     LEO_ReceiverFoM_dBK;
 
 EIRP_PSD_dBW_MHz(idx) = ...
     starlinkEIRPFromElevation( ...
-    Elevation_deg(idx), ...
-    LEO_ElevationControl_deg, ...
-    LEO_EIRP_Control_dBW_MHz);
+        Elevation_deg(idx), ...
+        LEO_ElevationControl_deg, ...
+        LEO_EIRP_Control_dBW_MHz);
 
 ParameterSource(idx) = ...
     "SpaceX Gen2 Technical Attachment Table A.4-5 + interpolation";
@@ -188,9 +309,7 @@ ParameterSource(idx) = ...
 ReceiverChain(idx) = ...
     "Starlink Gen2 user terminal";
 
-%% ============================================================
-% MEO
-% =============================================================
+%% MEO
 
 idx = Architecture == "MEO";
 
@@ -213,9 +332,7 @@ ParameterSource(idx) = ...
 ReceiverChain(idx) = ...
     "O3b mPOWER mP85L terminal";
 
-%% ============================================================
-% GEO
-% =============================================================
+%% GEO
 
 idx = Architecture == "GEO";
 
@@ -242,31 +359,13 @@ ParameterSource(idx) = ...
 ReceiverChain(idx) = ...
     "Representative GSO Ka earth station";
 
-%% Check architecture parameters
-
 assert(all(isfinite(Frequency_GHz)));
 assert(all(isfinite(EIRP_PSD_dBW_MHz)));
 assert(all(isfinite(ReceiverFoM_dBK)));
 
 %% ============================================================
-% Atmospheric gaseous attenuation
-% =============================================================
-
-fprintf('\nComputing ITU-R P.618/P.676 gaseous attenuation...\n');
-
-AtmosphericGasLoss_dB = computeP618GasLoss( ...
-    Frequency_GHz, ...
-    Elevation_deg, ...
-    userLat_deg, ...
-    userLon_deg, ...
-    userH_m, ...
-    GasAnnualExceedance_pct);
-
-%% ============================================================
 % Free-space path loss
-% =============================================================
-
-SlantRange_km = SlantRange_m/1e3;
+%% ============================================================
 
 FSPL_dB = ...
     92.45 ...
@@ -274,8 +373,8 @@ FSPL_dB = ...
     + 20*log10(Frequency_GHz);
 
 %% ============================================================
-% Positioning signal EIRP
-% =============================================================
+% Positioning-signal EIRP
+%% ============================================================
 
 EIRP_positioning_dBW = ...
     EIRP_PSD_dBW_MHz ...
@@ -283,8 +382,8 @@ EIRP_positioning_dBW = ...
     + 10*log10(etaPos);
 
 %% ============================================================
-% C/N0
-% =============================================================
+% Carrier-to-noise-density ratio
+%% ============================================================
 
 CN0_dBHz = ...
     EIRP_positioning_dBW ...
@@ -297,8 +396,8 @@ CN0_linear = ...
     10.^(CN0_dBHz/10);
 
 %% ============================================================
-% Ranging standard deviation
-% =============================================================
+% Pseudorange uncertainty
+%% ============================================================
 
 SigmaRho_m = ...
     c_mps ./ ...
@@ -308,17 +407,14 @@ SigmaRho_m = ...
 VarianceRho_m2 = ...
     SigmaRho_m.^2;
 
-%% Compatibility variable
+%% Compatibility fields
 
 AdditionalLoss_dB = zeros(Npool,1);
-
 GT_dBK = ReceiverFoM_dBK;
 
 %% ============================================================
-% Build output table
-% =============================================================
-
-PoolIndex = Tpool.PoolIndex;
+% Output table
+%% ============================================================
 
 Tlink = table( ...
     PoolIndex, ...
@@ -362,101 +458,11 @@ Tlink = table( ...
     'ParameterSource'});
 
 %% ============================================================
-% Load old link budget for controlled comparison
-% =============================================================
-
-oldLBFile = fullfile( ...
-    'C:\Repository\master-thesis-ntn-positioning', ...
-    'matlab_code', ...
-    'results_scenario4_link_budget', ...
-    'scenario4_link_budget.mat');
-
-if isfile(oldLBFile)
-
-    Old = load(oldLBFile);
-
-    Told = Old.Tlink;
-
-    assert(height(Told) == Npool);
-
-    dElevation_deg = ...
-        Tlink.Elevation_deg ...
-        - Told.Elevation_deg;
-
-    dRange_m = ...
-        1000*(Tlink.SlantRange_km ...
-        - Told.SlantRange_km);
-
-    dGas_dB = ...
-        Tlink.AtmosphericGasLoss_dB ...
-        - Told.AtmosphericGasLoss_dB;
-
-    dFSPL_dB = ...
-        Tlink.FSPL_dB ...
-        - Told.FSPL_dB;
-
-    dEIRP_PSD_dB = ...
-        Tlink.EIRP_PSD_dBW_MHz ...
-        - Told.EIRP_PSD_dBW_MHz;
-
-    dCN0_dB = ...
-        Tlink.CN0_dBHz ...
-        - Told.CN0_dBHz;
-
-    dSigmaRho_m = ...
-        Tlink.SigmaRho_m ...
-        - Told.SigmaRho_m;
-
-    fprintf('\n============================================================\n');
-    fprintf('OLD LINK BUDGET vs CORRECTED VALLADO LINK BUDGET\n');
-    fprintf('============================================================\n');
-
-    architectures = ["HAPS","LEO","MEO","GEO"];
-
-    for a = 1:numel(architectures)
-
-        arch = architectures(a);
-
-        idx = Architecture == arch;
-
-        fprintf('\n%s (%d)\n', ...
-            arch,sum(idx));
-
-        fprintf('max |dElevation| = %.6f deg\n', ...
-            max(abs(dElevation_deg(idx))));
-
-        fprintf('max |dRange|     = %.3f m\n', ...
-            max(abs(dRange_m(idx))));
-
-        fprintf('max |dGas|       = %.6f dB\n', ...
-            max(abs(dGas_dB(idx))));
-
-        fprintf('max |dFSPL|      = %.6f dB\n', ...
-            max(abs(dFSPL_dB(idx))));
-
-        fprintf('max |dEIRP PSD|  = %.6f dB\n', ...
-            max(abs(dEIRP_PSD_dB(idx))));
-
-        fprintf('max |dC/N0|      = %.6f dB-Hz\n', ...
-            max(abs(dCN0_dB(idx))));
-
-        fprintf('max |dSigmaRho|  = %.9f m\n', ...
-            max(abs(dSigmaRho_m(idx))));
-
-    end
-
-else
-
-    warning('Old link budget file was not found.');
-
-end
-
+% Summary
 %% ============================================================
-% Summary corrected link budget
-% =============================================================
 
 fprintf('\n============================================================\n');
-fprintf('CORRECTED LINK-BUDGET SUMMARY\n');
+fprintf('LINK-BUDGET SUMMARY\n');
 fprintf('============================================================\n');
 
 architectures = ["HAPS","LEO","MEO","GEO"];
@@ -464,7 +470,6 @@ architectures = ["HAPS","LEO","MEO","GEO"];
 for a = 1:numel(architectures)
 
     arch = architectures(a);
-
     idx = Architecture == arch;
 
     fprintf('\n%s\n',arch);
@@ -477,11 +482,15 @@ for a = 1:numel(architectures)
         min(SigmaRho_m(idx)), ...
         max(SigmaRho_m(idx)));
 
+    fprintf('Gas loss min / max   = %.6f / %.6f dB\n', ...
+        min(AtmosphericGasLoss_dB(idx)), ...
+        max(AtmosphericGasLoss_dB(idx)));
+
 end
 
 %% ============================================================
 % Save
-% =============================================================
+%% ============================================================
 
 resultsDir = fullfile(rootDir,'results');
 
@@ -508,6 +517,7 @@ save(matFile, ...
     'Frequency_GHz', ...
     'EIRP_PSD_dBW_MHz', ...
     'ReceiverFoM_dBK', ...
+    'GT_dBK', ...
     'AtmosphericGasLoss_dB', ...
     'AdditionalLoss_dB', ...
     'FSPL_dB', ...
@@ -533,17 +543,16 @@ save(matFile, ...
 writetable(Tlink,csvFile);
 
 fprintf('\nMAT file:\n%s\n',matFile);
-
 fprintf('\nCSV file:\n%s\n',csvFile);
 
 fprintf('\n============================================================\n');
-fprintf('CORRECTED LINK BUDGET COMPLETED\n');
+fprintf('LINK BUDGET COMPLETED\n');
 fprintf('============================================================\n');
 
 
 %% ============================================================
-% Local function - Starlink EIRP interpolation
-% =============================================================
+% Local function: LEO EIRP interpolation
+%% ============================================================
 
 function eirp = starlinkEIRPFromElevation( ...
     elevation_deg, ...
@@ -563,67 +572,5 @@ function eirp = starlinkEIRPFromElevation( ...
         'linear');
 
     eirp = eirp(:);
-
-end
-
-
-%% ============================================================
-% Local function - ITU-R P.618/P.676 gaseous loss
-% =============================================================
-
-function Ag_dB = computeP618GasLoss( ...
-    Frequency_GHz, ...
-    Elevation_deg, ...
-    lat_deg, ...
-    lon_deg, ...
-    userH_m, ...
-    GasAnnualExceedance_pct)
-
-    Frequency_GHz = Frequency_GHz(:);
-    Elevation_deg = Elevation_deg(:);
-
-    if any(Elevation_deg < 5)
-
-        error([ ...
-            'The P.618 model used in this script ' ...
-            'requires elevation >= 5 deg.']);
-
-    end
-
-    N = numel(Frequency_GHz);
-
-    Ag_dB = nan(N,1);
-
-    cfgP = p618Config;
-
-    cfgP.Latitude = lat_deg;
-    cfgP.Longitude = lon_deg;
-
-    cfgP.GasAnnualExceedance = ...
-        GasAnnualExceedance_pct;
-
-    for ii = 1:N
-
-        cfgP.Frequency = ...
-            Frequency_GHz(ii)*1e9;
-
-        cfgP.ElevationAngle = ...
-            Elevation_deg(ii);
-
-        pl = p618PropagationLosses( ...
-            cfgP, ...
-            'StationHeight', ...
-            userH_m/1e3);
-
-        Ag_dB(ii) = pl.Ag;
-
-    end
-
-    if any(~isfinite(Ag_dB)) || ...
-       any(Ag_dB < 0)
-
-        error('Invalid ITU-R gaseous attenuation.');
-
-    end
 
 end

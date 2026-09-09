@@ -3,17 +3,29 @@ clc;
 format long;
 
 %% ============================================================
-% BACKWARD ELIMINATION - GEOMETRY
+% BACKWARD ELIMINATION
 %
-% Same BE algorithm used in the paper baseline.
+% Objective:
+%   Apply Backward Elimination (BE) to the nominal 26-transmitter
+%   candidate pool and reduce the selected set while preserving the
+%   prescribed positional-bound target.
 %
+% The algorithm starts from the full candidate pool. At each iteration,
+% every possible single-transmitter removal is evaluated. Among the
+% admissible removals that preserve rank(H)=4 and satisfy the target,
+% the transmitter producing the smallest remaining positional bound is
+% removed.
 %
-%   MATLAB satelliteScenario SGP4
-%                  ->
-%   Vallado SGP4 / WGS-72
+% A deterministic tie break removes the smallest PoolIndex whenever two
+% admissible removals produce the same bound within numerical tolerance.
 %
 % Target:
 %   positional bound <= 0.6 m
+%
+% Outputs:
+%   results/BE_results.mat
+%   results/BE_selected.csv
+%   results/BE_trace.csv
 %% ============================================================
 
 rootDir = fileparts(mfilename('fullpath'));
@@ -145,7 +157,7 @@ end
 
 target_m = 0.6;
 
-% Same numerical tolerance as original BE
+% Numerical tolerance used for the target comparison
 targetTol = 1e-12;
 
 %% ============================================================
@@ -162,7 +174,7 @@ end
 
 u = r ./ d;
 
-% Exact convention used by the original algorithm
+% Geometry-matrix convention used by the selection algorithm
 Hfull = [-u,ones(Npool,1)];
 
 %% ============================================================
@@ -312,7 +324,7 @@ while numel(selected) > 4
         nEvaluatedThisIteration = ...
             nEvaluatedThisIteration + 1;
 
-        %% Removal must preserve rank and target
+        %% Removal admissibility
 
         if trialRankH ~= 4
             continue;
@@ -322,7 +334,7 @@ while numel(selected) > 4
             continue;
         end
 
-        %% Select least detrimental removal
+        %% Select the admissible removal with the smallest remaining bound
 
         if trialBound < bestTrialBound
 
@@ -346,7 +358,7 @@ while numel(selected) > 4
         end
     end
 
-    %% Stopping criterion
+    %% Stopping condition
 
     if isnan(bestRemoved)
 
@@ -359,7 +371,7 @@ while numel(selected) > 4
 
     end
 
-    %% Accept removal
+    %% Accept the selected removal
 
     selected(selected == bestRemoved) = [];
 
@@ -559,7 +571,7 @@ fprintf('============================================================\n');
 
 
 %% ============================================================
-% Local function
+% Local weighted positional metric
 %% ============================================================
 
 function [bound_m,PDOP,rankH] = ...
