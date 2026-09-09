@@ -2,19 +2,20 @@ clear;
 clc;
 
 %% ============================================================
-% BUILD CORRECTED 26-TRANSMITTER CANDIDATE POOL
+% BUILD 26-TRANSMITTER CANDIDATE POOL
 %
-% Composition is kept identical to the original paper pool:
+% Nominal pool used in the manuscript:
 %   4 HAPS
 %   8 LEO
 %   7 MEO
 %   7 GEO
 %
-% The only change is the orbital state source:
-%   OLD: MATLAB satelliteScenario SGP4
-%   NEW: Vallado SGP4 / WGS-72
+% Orbital transmitter states are read from:
+%   results/orbital_catalog.mat
 %
-% HAPS positions are kept unchanged.
+% The four deterministic HAPS positions are defined directly in
+% this script so that the candidate-pool construction has no
+% dependency on files outside this repository.
 % =============================================================
 
 rootDir = fileparts(mfilename('fullpath'));
@@ -27,115 +28,214 @@ cd(rootDir);
 setup_paths;
 
 fprintf('\n============================================================\n');
-fprintf('BUILD 26-TX CANDIDATE POOL - VALLADO CORRECTION\n');
+fprintf('BUILD 26-TX CANDIDATE POOL\n');
 fprintf('============================================================\n');
 
 %% ============================================================
-% Old candidate pool
-%
-% Used here only to preserve:
-%   - exact 26-Tx composition
-%   - HAPS positions
-%   - labels and ordering
-%
-% This dependency will be removed from the final standalone
-% reproducibility repository after validation.
+% Load orbital catalog
 % =============================================================
 
-oldFile = fullfile( ...
-    'C:\Repository\master-thesis-ntn-positioning', ...
-    'matlab_code', ...
-    'results_scenario4_candidate_pool', ...
-    'scenario4_candidate_pool_26.mat');
-
-assert(isfile(oldFile), ...
-    'Original candidate pool not found:\n%s',oldFile);
-
-Old = load(oldFile);
-
-Told = Old.Tpool;
-
-assert(height(Told) == 26, ...
-    'Original pool should contain 26 transmitters.');
-
-%% ============================================================
-% Corrected Vallado orbital catalog
-% =============================================================
-
-catalogFile = fullfile( ...
-    rootDir, ...
-    'results', ...
-    'orbital_catalog.mat');
+catalogFile = fullfile(rootDir,'results','orbital_catalog.mat');
 
 assert(isfile(catalogFile), ...
-    'Corrected Vallado catalog not found:\n%s',catalogFile);
+    ['Orbital catalog not found:\n%s\n\n' ...
+     'Run build_orbital_catalog.m first.'], ...
+    catalogFile);
 
-New = load(catalogFile);
+S = load(catalogFile);
 
-Tcatalog = New.TOrbitalCatalog;
+requiredVars = { ...
+    'TOrbitalCatalog', ...
+    'analysisTimeUTC', ...
+    'UserPositionECEF', ...
+    'userLat_deg', ...
+    'userLon_deg', ...
+    'userH_m'};
 
-analysisTimeUTC = New.analysisTimeUTC;
+for k = 1:numel(requiredVars)
+    assert(isfield(S,requiredVars{k}), ...
+        'Variable %s is missing from orbital_catalog.mat.', ...
+        requiredVars{k});
+end
 
-UserPositionECEF = New.UserPositionECEF(:);
+Tcatalog = S.TOrbitalCatalog;
 
-userLat_deg = New.userLat_deg;
-userLon_deg = New.userLon_deg;
-userH_m     = New.userH_m;
+analysisTimeUTC = S.analysisTimeUTC;
+UserPositionECEF = S.UserPositionECEF(:);
 
-%% ============================================================
-% Start from the exact original composition/order
-% =============================================================
+userLat_deg = S.userLat_deg;
+userLon_deg = S.userLon_deg;
+userH_m     = S.userH_m;
 
-Tpool = Told;
+requiredColumns = { ...
+    'Architecture', ...
+    'NORAD_CAT_ID', ...
+    'ObjectName', ...
+    'X_ECEF_m', ...
+    'Y_ECEF_m', ...
+    'Z_ECEF_m'};
 
-% Normalize string variables
-Tpool.Label        = string(Tpool.Label);
-Tpool.Architecture = string(Tpool.Architecture);
-Tpool.NORAD_CAT_ID = string(Tpool.NORAD_CAT_ID);
-Tpool.ObjectName   = string(Tpool.ObjectName);
+for k = 1:numel(requiredColumns)
+    assert(ismember(requiredColumns{k},Tcatalog.Properties.VariableNames), ...
+        'Column %s is missing from TOrbitalCatalog.', ...
+        requiredColumns{k});
+end
 
 Tcatalog.Architecture = string(Tcatalog.Architecture);
 Tcatalog.NORAD_CAT_ID = string(Tcatalog.NORAD_CAT_ID);
+Tcatalog.ObjectName   = string(Tcatalog.ObjectName);
 
 %% ============================================================
-% Replace ONLY orbital ECEF states
+% Nominal orbital identities and ordering
+%
+% Ordering follows the manuscript candidate pool:
+%   HAPS1-HAPS4
+%   LEO1-LEO8
+%   MEO1-MEO7
+%   GEO1-GEO7
 % =============================================================
 
-orbitalArchitectures = ["LEO","MEO","GEO"];
+nominalLEO = [ ...
+    "65175"
+    "66864"
+    "65348"
+    "59340"
+    "67736"
+    "59960"
+    "65279"
+    "48482"];
 
-for k = 1:height(Tpool)
+nominalMEO = [ ...
+    "62362"
+    "40081"
+    "44115"
+    "43231"
+    "43234"
+    "40080"
+    "40079"];
 
-    arch = Tpool.Architecture(k);
-
-    if any(arch == orbitalArchitectures)
-
-        norad = Tpool.NORAD_CAT_ID(k);
-
-        idx = ...
-            Tcatalog.Architecture == arch & ...
-            Tcatalog.NORAD_CAT_ID == norad;
-
-        assert(sum(idx) == 1, ...
-            'Could not uniquely match %s NORAD %s.', ...
-            arch,norad);
-
-        Tpool.X_ECEF_m(k) = Tcatalog.X_ECEF_m(idx);
-        Tpool.Y_ECEF_m(k) = Tcatalog.Y_ECEF_m(idx);
-        Tpool.Z_ECEF_m(k) = Tcatalog.Z_ECEF_m(idx);
-
-    end
-
-end
+nominalGEO = [ ...
+    "41589"
+    "41904"
+    "42692"
+    "43562"
+    "43175"
+    "43228"
+    "38087"];
 
 %% ============================================================
-% Recompute geometry for all 26 transmitters
+% Deterministic HAPS geometry
+%
+% Design:
+%   altitude  = 20 km
+%   azimuths  = [45, 135, 225, 315] deg
+%   elevations= [80, 30, 30, 25] deg
+%
+% The ECEF coordinates below are the deterministic positions used
+% by the experiment.
 % =============================================================
 
-Npool = height(Tpool);
+hapsPositionECEF_m = [ ...
+    4300163.5114, -4038986.2343, -2467878.3986;
+    4307453.7286, -4015855.7636, -2492621.1302;
+    4274112.7443, -4051322.6714, -2492621.1302;
+    4285517.3843, -4070008.4688, -2442427.3239];
+
+hapsDesignAzimuth_deg   = [45; 135; 225; 315];
+hapsDesignElevation_deg = [80; 30; 30; 25];
+hapsAltitude_m          = 20000;
+
+%% ============================================================
+% Allocate nominal 26-transmitter pool
+% =============================================================
+
+nHAPS = 4;
+nLEO  = numel(nominalLEO);
+nMEO  = numel(nominalMEO);
+nGEO  = numel(nominalGEO);
+
+Npool = nHAPS + nLEO + nMEO + nGEO;
+
+assert(Npool == 26);
+
+PoolIndex    = (1:Npool).';
+Label        = strings(Npool,1);
+Architecture = strings(Npool,1);
+NORAD        = strings(Npool,1);
+ObjectName   = strings(Npool,1);
+Mask_deg     = zeros(Npool,1);
 
 PositionECEF = zeros(Npool,3);
-uLOS         = zeros(Npool,3);
 
+%% ============================================================
+% HAPS entries
+% =============================================================
+
+idxHAPS = 1:nHAPS;
+
+Label(idxHAPS)        = compose("HAPS%d",(1:nHAPS).');
+Architecture(idxHAPS) = "HAPS";
+NORAD(idxHAPS)        = "";
+ObjectName(idxHAPS)   = Label(idxHAPS);
+Mask_deg(idxHAPS)     = 15;
+
+PositionECEF(idxHAPS,:) = hapsPositionECEF_m;
+
+%% ============================================================
+% Orbital entries
+% =============================================================
+
+nextIndex = nHAPS + 1;
+
+[nextIndex,Label,Architecture,NORAD,ObjectName,Mask_deg,PositionECEF] = ...
+    appendArchitecture( ...
+        Tcatalog, ...
+        nextIndex, ...
+        "LEO", ...
+        nominalLEO, ...
+        5, ...
+        Label, ...
+        Architecture, ...
+        NORAD, ...
+        ObjectName, ...
+        Mask_deg, ...
+        PositionECEF);
+
+[nextIndex,Label,Architecture,NORAD,ObjectName,Mask_deg,PositionECEF] = ...
+    appendArchitecture( ...
+        Tcatalog, ...
+        nextIndex, ...
+        "MEO", ...
+        nominalMEO, ...
+        5, ...
+        Label, ...
+        Architecture, ...
+        NORAD, ...
+        ObjectName, ...
+        Mask_deg, ...
+        PositionECEF);
+
+[nextIndex,Label,Architecture,NORAD,ObjectName,Mask_deg,PositionECEF] = ...
+    appendArchitecture( ...
+        Tcatalog, ...
+        nextIndex, ...
+        "GEO", ...
+        nominalGEO, ...
+        5, ...
+        Label, ...
+        Architecture, ...
+        NORAD, ...
+        ObjectName, ...
+        Mask_deg, ...
+        PositionECEF);
+
+assert(nextIndex == Npool + 1);
+
+%% ============================================================
+% Geometry
+% =============================================================
+
+uLOS          = zeros(Npool,3);
 Azimuth_deg   = zeros(Npool,1);
 Elevation_deg = zeros(Npool,1);
 SlantRange_m  = zeros(Npool,1);
@@ -143,12 +243,7 @@ Visible       = false(Npool,1);
 
 for k = 1:Npool
 
-    rTx = [ ...
-        Tpool.X_ECEF_m(k);
-        Tpool.Y_ECEF_m(k);
-        Tpool.Z_ECEF_m(k)];
-
-    PositionECEF(k,:) = rTx.';
+    rTx = PositionECEF(k,:).';
 
     [az,el,range_m,u] = lookAnglesECEF( ...
         rTx, ...
@@ -162,30 +257,12 @@ for k = 1:Npool
 
     uLOS(k,:) = u.';
 
-    Visible(k) = el >= Tpool.Mask_deg(k);
+    Visible(k) = el >= Mask_deg(k);
 
 end
 
-%% Update table geometry
-
-Tpool.Azimuth_deg   = Azimuth_deg;
-Tpool.Elevation_deg = Elevation_deg;
-Tpool.SlantRange_km = SlantRange_m/1000;
-Tpool.Visible       = Visible;
-
 %% ============================================================
-% Compatibility variables
-% =============================================================
-
-PoolIndex    = Tpool.PoolIndex;
-Label        = Tpool.Label;
-Architecture = Tpool.Architecture;
-NORAD        = Tpool.NORAD_CAT_ID;
-ObjectName   = Tpool.ObjectName;
-Mask_deg     = Tpool.Mask_deg;
-
-%% ============================================================
-% Composition checks
+% Sanity checks
 % =============================================================
 
 assert(sum(Architecture=="HAPS") == 4);
@@ -194,33 +271,48 @@ assert(sum(Architecture=="MEO")  == 7);
 assert(sum(Architecture=="GEO")  == 7);
 
 assert(all(Visible), ...
-    'At least one transmitter in the corrected nominal pool is not visible.');
+    'At least one transmitter in the nominal pool is below its elevation mask.');
+
+% The deterministic HAPS ECEF coordinates should reproduce the
+% nominal elevation design to numerical precision.
+hapsElevationError_deg = ...
+    Elevation_deg(idxHAPS) - hapsDesignElevation_deg;
+
+assert(max(abs(hapsElevationError_deg)) < 1e-3, ...
+    'HAPS geometry does not reproduce the nominal elevation design.');
 
 %% ============================================================
-% Compare against old 26-Tx pool
+% Build output table
 % =============================================================
 
-rOld = [ ...
-    Told.X_ECEF_m, ...
-    Told.Y_ECEF_m, ...
-    Told.Z_ECEF_m];
-
-rNew = PositionECEF;
-
-positionDifference_m = sqrt(sum((rNew-rOld).^2,2));
-
-elevationDifference_deg = ...
-    Tpool.Elevation_deg - Told.Elevation_deg;
-
-azimuthDifference_deg = mod( ...
-    Tpool.Azimuth_deg - Told.Azimuth_deg + 180, ...
-    360) - 180;
-
-rangeDifference_m = ...
-    1000*(Tpool.SlantRange_km - Told.SlantRange_km);
-
-visibilityChanged = ...
-    Tpool.Visible ~= Told.Visible;
+Tpool = table( ...
+    PoolIndex, ...
+    Label, ...
+    Architecture, ...
+    NORAD, ...
+    ObjectName, ...
+    PositionECEF(:,1), ...
+    PositionECEF(:,2), ...
+    PositionECEF(:,3), ...
+    Mask_deg, ...
+    Azimuth_deg, ...
+    Elevation_deg, ...
+    SlantRange_m/1000, ...
+    Visible, ...
+    'VariableNames',{ ...
+        'PoolIndex', ...
+        'Label', ...
+        'Architecture', ...
+        'NORAD_CAT_ID', ...
+        'ObjectName', ...
+        'X_ECEF_m', ...
+        'Y_ECEF_m', ...
+        'Z_ECEF_m', ...
+        'Mask_deg', ...
+        'Azimuth_deg', ...
+        'Elevation_deg', ...
+        'SlantRange_km', ...
+        'Visible'});
 
 %% ============================================================
 % Summary
@@ -232,42 +324,19 @@ fprintf('LEO  : %d\n',sum(Architecture=="LEO"));
 fprintf('MEO  : %d\n',sum(Architecture=="MEO"));
 fprintf('GEO  : %d\n',sum(Architecture=="GEO"));
 
-architectures = ["HAPS","LEO","MEO","GEO"];
+fprintf('\nHAPS geometry:\n');
 
-fprintf('\n============================================================\n');
-fprintf('OLD POOL vs CORRECTED VALLADO POOL\n');
-fprintf('============================================================\n');
-
-for a = 1:numel(architectures)
-
-    arch = architectures(a);
-    idx = Architecture == arch;
-
-    fprintf('\n%s (%d)\n',arch,sum(idx));
-
-    fprintf('Max position difference  = %.3f m\n', ...
-        max(positionDifference_m(idx)));
-
-    fprintf('Max |azimuth difference| = %.6f deg\n', ...
-        max(abs(azimuthDifference_deg(idx))));
-
-    fprintf('Max |elevation diff.|     = %.6f deg\n', ...
-        max(abs(elevationDifference_deg(idx))));
-
-    fprintf('Max |range difference|    = %.3f m\n', ...
-        max(abs(rangeDifference_m(idx))));
-
-    fprintf('Visibility changes        = %d\n', ...
-        sum(visibilityChanged(idx)));
-
+for k = idxHAPS
+    fprintf( ...
+        '%s: az = %.6f deg, el = %.6f deg, range = %.3f km\n', ...
+        Label(k), ...
+        Azimuth_deg(k), ...
+        Elevation_deg(k), ...
+        SlantRange_m(k)/1000);
 end
 
-%% ============================================================
-% Print corrected pool
-% =============================================================
-
 fprintf('\n============================================================\n');
-fprintf('CORRECTED 26-TX POOL\n');
+fprintf('NOMINAL 26-TX CANDIDATE POOL\n');
 fprintf('============================================================\n');
 
 disp(Tpool(:,{ ...
@@ -291,13 +360,8 @@ if ~exist(resultsDir,'dir')
     mkdir(resultsDir);
 end
 
-matFile = fullfile( ...
-    resultsDir, ...
-    'candidate_pool_26.mat');
-
-csvFile = fullfile( ...
-    resultsDir, ...
-    'candidate_pool_26.csv');
+matFile = fullfile(resultsDir,'candidate_pool_26.mat');
+csvFile = fullfile(resultsDir,'candidate_pool_26.csv');
 
 save(matFile, ...
     'Tpool', ...
@@ -318,11 +382,13 @@ save(matFile, ...
     'userLat_deg', ...
     'userLon_deg', ...
     'userH_m', ...
-    'positionDifference_m', ...
-    'azimuthDifference_deg', ...
-    'elevationDifference_deg', ...
-    'rangeDifference_m', ...
-    'visibilityChanged');
+    'nominalLEO', ...
+    'nominalMEO', ...
+    'nominalGEO', ...
+    'hapsPositionECEF_m', ...
+    'hapsDesignAzimuth_deg', ...
+    'hapsDesignElevation_deg', ...
+    'hapsAltitude_m');
 
 writetable(Tpool,csvFile);
 
@@ -330,8 +396,61 @@ fprintf('\nMAT file:\n%s\n',matFile);
 fprintf('\nCSV file:\n%s\n',csvFile);
 
 fprintf('\n============================================================\n');
-fprintf('CORRECTED 26-TX CANDIDATE POOL COMPLETED\n');
+fprintf('26-TX CANDIDATE POOL COMPLETED\n');
 fprintf('============================================================\n');
+
+
+%% ============================================================
+% Local function: append one orbital architecture
+% =============================================================
+
+function [nextIndex,Label,Architecture,NORAD,ObjectName,Mask_deg,PositionECEF] = ...
+    appendArchitecture( ...
+        Tcatalog, ...
+        nextIndex, ...
+        architectureName, ...
+        nominalNORAD, ...
+        mask_deg, ...
+        Label, ...
+        Architecture, ...
+        NORAD, ...
+        ObjectName, ...
+        Mask_deg, ...
+        PositionECEF)
+
+    architectureName = string(architectureName);
+    nominalNORAD = string(nominalNORAD(:));
+
+    for j = 1:numel(nominalNORAD)
+
+        norad = nominalNORAD(j);
+
+        idx = ...
+            Tcatalog.Architecture == architectureName & ...
+            Tcatalog.NORAD_CAT_ID == norad;
+
+        assert(sum(idx) == 1, ...
+            'Could not uniquely match %s NORAD %s in orbital catalog.', ...
+            architectureName,norad);
+
+        k = nextIndex;
+
+        Label(k)        = sprintf('%s%d',architectureName,j);
+        Architecture(k) = architectureName;
+        NORAD(k)        = norad;
+        ObjectName(k)   = Tcatalog.ObjectName(idx);
+        Mask_deg(k)     = mask_deg;
+
+        PositionECEF(k,:) = [ ...
+            Tcatalog.X_ECEF_m(idx), ...
+            Tcatalog.Y_ECEF_m(idx), ...
+            Tcatalog.Z_ECEF_m(idx)];
+
+        nextIndex = nextIndex + 1;
+
+    end
+
+end
 
 
 %% ============================================================
@@ -340,10 +459,10 @@ fprintf('============================================================\n');
 
 function [az_deg,el_deg,range_m,uLOS] = ...
     lookAnglesECEF( ...
-    rTx_m, ...
-    rUser_m, ...
-    userLat_deg, ...
-    userLon_deg)
+        rTx_m, ...
+        rUser_m, ...
+        userLat_deg, ...
+        userLon_deg)
 
     rTx_m   = rTx_m(:);
     rUser_m = rUser_m(:);
@@ -375,12 +494,8 @@ function [az_deg,el_deg,range_m,uLOS] = ...
         +cos(lat)*sin(lon)*d(2) ...
         +sin(lat)*d(3);
 
-    az_deg = mod( ...
-        atan2(east,north)*180/pi, ...
-        360);
+    az_deg = mod(atan2(east,north)*180/pi,360);
 
-    el_deg = atan2( ...
-        up, ...
-        hypot(east,north))*180/pi;
+    el_deg = atan2(up,hypot(east,north))*180/pi;
 
 end
