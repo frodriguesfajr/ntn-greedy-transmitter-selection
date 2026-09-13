@@ -1,0 +1,3 @@
+The integral maps referenced by this Recommendation were derived from various data products from the
+European Centre for Medium-Range Weather Forecasts (ECMWF) Copernicus Climate Change Service.
+Neither the European Commission nor ECMWF is responsible for the use or application of these maps.

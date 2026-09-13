@@ -25,3 +25,40 @@ results/MC_outliers/*.mat
 results/link_budget.csv
 results/HAPS_restrictions_summary.csv
 results/LEO_availability_summary.csv
+# ------------------------------------------------------------
+# Local archive / transitional material
+# ------------------------------------------------------------
+old/
+external/
+haps_files/
+
+# ------------------------------------------------------------
+# MATLAB temporary files
+# ------------------------------------------------------------
+*.asv
+*.m~
+*.bak
+
+# ------------------------------------------------------------
+# Generated intermediate data
+# ------------------------------------------------------------
+data/generated/
+
+# ITU-R P.2145 local data.
+# Keep downloaded maps locally; do not version large archives/maps.
+data/itu/p2145/P2145_Annual.zip
+data/itu/p2145/annual/*.zip
+data/itu/p2145/annual/*_Annual/
+
+# Legacy MATLAB/ITU map packages not used by the portable pipeline
+matlab/core/*.mat
+matlab/core/*.tar.gz
+
+# ------------------------------------------------------------
+# Generated experiment outputs
+# ------------------------------------------------------------
+results/experiment1_temporal/
+results/experiment2_selection_robustness/
+results/experiment3_availability/
+results/paper_figures_experiment3/
+results/stk_haps/

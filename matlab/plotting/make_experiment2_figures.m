@@ -1,0 +1,690 @@
+close all;
+clear;
+clc;
+
+%% ========================================================================
+% MAKE EXPERIMENT 2 FIGURES
+%
+% This file combines the two final plotting scripts:
+%   1) selection_necessity_make_paper_figure.m
+%   2) experiment2_make_paper_figure.m
+%
+% It preserves their final visual formatting and only adapts:
+%   - repository paths;
+%   - current Experiment 2 result files;
+%   - terminology from FTS/BTS to FA/BE.
+%
+% NUMERICAL INPUTS
+% ----------------
+% results/experiment2_selection_robustness/
+%     selection_necessity_results.mat
+%     experiment2_robust_postprocessed.mat
+%     experiment2_robust_results.mat
+%
+% OUTPUTS
+% -------
+% results/experiment2_selection_robustness/figures/
+%     selection_necessity.pdf/png/fig
+%     experiment2_robustness_rmse.pdf/png/fig
+%
+% This script DOES NOT rerun simulations.
+% ========================================================================
+
+%% ========================================================================
+% Repository
+% ========================================================================
+
+thisFile = mfilename('fullpath');
+
+if isempty(thisFile)
+    error('Save this script before running it.');
+end
+
+repoRoot = fileparts(thisFile);
+
+while ~isfolder(fullfile(repoRoot,'.git'))
+
+    parentDir = fileparts(repoRoot);
+
+    if strcmp(parentDir,repoRoot)
+        error('Could not locate Git repository root from:\n%s',thisFile);
+    end
+
+    repoRoot = parentDir;
+end
+
+setupFile = fullfile( ...
+    repoRoot,'matlab','setup','setup_paths.m');
+
+assert(isfile(setupFile), ...
+    'setup_paths.m not found:\n%s',setupFile);
+
+addpath(fullfile(repoRoot,'matlab','setup'),'-begin');
+setup_paths;
+cd(repoRoot);
+
+experimentDir = fullfile( ...
+    repoRoot, ...
+    'results', ...
+    'experiment2_selection_robustness');
+
+selectionFile = fullfile( ...
+    experimentDir, ...
+    'experiment2_selection_necessity_results.mat');
+
+postFile = fullfile( ...
+    experimentDir, ...
+    'experiment2_robust_postprocessed.mat');
+
+resultsFile = fullfile( ...
+    experimentDir, ...
+    'experiment2_robust_results.mat');
+
+outDir = fullfile( ...
+    experimentDir, ...
+    'figures');
+
+if ~isfile(selectionFile)
+    error('Input file not found: %s',selectionFile);
+end
+
+if ~isfile(postFile)
+    error('Input file not found: %s',postFile);
+end
+
+if ~isfile(resultsFile)
+    error('Input file not found: %s',resultsFile);
+end
+
+if ~isfolder(outDir)
+    mkdir(outDir);
+end
+
+fprintf('\n============================================================\n');
+fprintf('EXPERIMENT 2 - PAPER FIGURES\n');
+fprintf('============================================================\n');
+fprintf('Selection input : %s\n',selectionFile);
+fprintf('Robustness input: %s\n',postFile);
+fprintf('Output folder   : %s\n',outDir);
+fprintf('============================================================\n');
+
+%% ========================================================================
+% FIGURE 1 - SELECTION RELEVANCE
+% Based directly on selection_necessity_make_paper_figure.m
+% ========================================================================
+
+S = load(selectionFile);
+
+requiredVars = { ...
+    'K', ...
+    'N_random', ...
+    'target_m', ...
+    'RandomBound_m', ...
+    'RandomRankH', ...
+    'Tmethods'};
+
+for k = 1:numel(requiredVars)
+
+    if ~isfield(S,requiredVars{k})
+        error('Variable "%s" not found in %s.', ...
+            requiredVars{k},selectionFile);
+    end
+end
+
+K = double(S.K);
+N_random = double(S.N_random);
+target_m = double(S.target_m);
+
+RandomBound_m = double(S.RandomBound_m(:));
+RandomRankH = double(S.RandomRankH(:));
+Tmethods = S.Tmethods;
+
+%% FA/BE bound
+
+methodNames = string(Tmethods.Method);
+
+idxFA = find(methodNames == "FA selected",1);
+idxBE = find(methodNames == "BE selected",1);
+
+if isempty(idxFA) || isempty(idxBE)
+    error('Could not locate FA selected and BE selected in Tmethods.');
+end
+
+faBound_m = double(Tmethods.PositionalBound_m(idxFA));
+beBound_m = double(Tmethods.PositionalBound_m(idxBE));
+
+% FA and BE coincide at the reference epoch.
+selectedBound_m = 0.5*(faBound_m+beBound_m);
+
+%% Empirical CDF
+
+valid = ...
+    isfinite(RandomBound_m) & ...
+    RandomRankH == 4;
+
+xCDF = sort(RandomBound_m(valid));
+nCDF = numel(xCDF);
+
+if nCDF == 0
+    error('No finite full-rank random subset bounds were found.');
+end
+
+yCDF = (1:nCDF).' / nCDF;
+
+%% Colors
+
+cRandom   = [0.0000 0.4470 0.7410];
+cSelected = [0.8500 0.3250 0.0980];
+cTarget   = [0.45 0.45 0.45];
+
+%% Figure
+
+fig1 = figure( ...
+    'Name','Selection relevance', ...
+    'NumberTitle','off', ...
+    'Color','w', ...
+    'Visible','on', ...
+    'Units','inches', ...
+    'Position',[1 1 3.45 3.24]);
+
+ax1 = axes('Parent',fig1);
+
+hold(ax1,'on');
+grid(ax1,'on');
+box(ax1,'on');
+
+%% Random-subset empirical CDF
+
+pRandom = plot( ...
+    ax1,xCDF,yCDF, ...
+    '-', ...
+    'Color',cRandom, ...
+    'LineWidth',1.8, ...
+    'DisplayName',sprintf('Random subsets, K=%d',K));
+
+%% FA/BE reference
+
+pSelected = xline( ...
+    ax1,selectedBound_m, ...
+    '-', ...
+    'Color',cSelected, ...
+    'LineWidth',1.8, ...
+    'DisplayName','FA/BE');
+
+%% Target
+
+pTarget = xline( ...
+    ax1,target_m, ...
+    '--', ...
+    'Color',cTarget, ...
+    'LineWidth',1.6, ...
+    'DisplayName','Target');
+
+%% Axes
+
+xlabel( ...
+    ax1,'Position bound [m]', ...
+    'FontName','Times New Roman', ...
+    'FontSize',14);
+
+ylabel( ...
+    ax1,'Empirical CDF', ...
+    'FontName','Times New Roman', ...
+    'FontSize',14);
+
+ylim(ax1,[0 1]);
+
+% Focus on random distribution, selected solution, and target.
+xmin = min([xCDF;selectedBound_m;target_m]);
+xmax = max([xCDF;selectedBound_m;target_m]);
+
+xPad = 0.04*(xmax-xmin);
+xlim(ax1,[xmin-xPad xmax+xPad]);
+
+set( ...
+    ax1, ...
+    'FontName','Times New Roman', ...
+    'FontSize',11, ...
+    'LineWidth',1.0, ...
+    'GridAlpha',0.22, ...
+    'Layer','top');
+
+%% Legend
+
+lg1 = legend( ...
+    ax1, ...
+    [pRandom pSelected pTarget], ...
+    {sprintf('Random subsets, K=%d',K), ...
+     'FA/BE', ...
+     'Target'}, ...
+    'Location','southeast', ...
+    'Box','off', ...
+    'FontName','Times New Roman', ...
+    'FontSize',8);
+
+lg1.ItemTokenSize = [13 7];
+
+%% Export
+
+selectionPNG = fullfile(outDir,'experiment2_selection_necessity.png');
+selectionPDF = fullfile(outDir,'experiment2_selection_necessity.pdf');
+selectionFIG = fullfile(outDir,'experiment2_selection_necessity.fig');
+
+drawnow;
+
+exportgraphics( ...
+    fig1,selectionPNG, ...
+    'Resolution',400);
+
+exportgraphics( ...
+    fig1,selectionPDF, ...
+    'ContentType','vector');
+
+savefig(fig1,selectionFIG);
+
+close(fig1);
+
+%% ========================================================================
+% FIGURE 2 - ROBUSTNESS TO IMPULSIVE OUTLIERS
+% Based directly on experiment2_make_paper_figure.m
+% ========================================================================
+
+%% Load postprocessed RMSE results
+
+Spost = load(postFile);
+
+if ~isfield(Spost,'Tpost')
+    error('Variable Tpost not found in %s.',postFile);
+end
+
+Tplot = Spost.Tpost;
+
+requiredPostVars = { ...
+    'N_out', ...
+    'NoSelection_RMSE_m', ...
+    'FTS_RMSE_Global_m', ...
+    'BTS_RMSE_Global_m', ...
+    'FTS_RMSE_ExactAndFeasible_m', ...
+    'BTS_RMSE_ExactAndFeasible_m'};
+
+for k = 1:numel(requiredPostVars)
+
+    if ~ismember(requiredPostVars{k},Tplot.Properties.VariableNames)
+
+        error( ...
+            'Required variable "%s" not found in Tpost.', ...
+            requiredPostVars{k});
+    end
+end
+
+%% Data
+
+Nout = double(Tplot.N_out(:));
+
+yNoSelection = ...
+    double(Tplot.NoSelection_RMSE_m(:));
+
+% Tpost preserves the legacy column names for plot compatibility.
+% Numerically, these are the current FA/BE results.
+yFA = ...
+    double(Tplot.FTS_RMSE_Global_m(:));
+
+yBE = ...
+    double(Tplot.BTS_RMSE_Global_m(:));
+
+yFAef = ...
+    double(Tplot.FTS_RMSE_ExactAndFeasible_m(:));
+
+yBEef = ...
+    double(Tplot.BTS_RMSE_ExactAndFeasible_m(:));
+
+%% Mean candidate-subset evaluation counts
+%
+% Current Experiment 2 writes these directly into Tpost.
+% A fallback is retained for compatibility with older MAT files.
+
+if ismember('MeanEvaluations_FA',Tplot.Properties.VariableNames) && ...
+   ismember('MeanEvaluations_BE',Tplot.Properties.VariableNames)
+
+    evalFA = double(Tplot.MeanEvaluations_FA(:));
+    evalBE = double(Tplot.MeanEvaluations_BE(:));
+
+else
+
+    Sres = load(resultsFile);
+
+    if isfield(Sres,'TrobustSummary')
+
+        Teval = Sres.TrobustSummary;
+
+        requiredEvalVars = { ...
+            'N_out', ...
+            'MeanEvaluations_FA', ...
+            'MeanEvaluations_BE'};
+
+        for k = 1:numel(requiredEvalVars)
+
+            if ~ismember(requiredEvalVars{k}, ...
+                    Teval.Properties.VariableNames)
+
+                error( ...
+                    'Required variable "%s" not found in TrobustSummary.', ...
+                    requiredEvalVars{k});
+            end
+        end
+
+        [tf,loc] = ...
+            ismember(Nout,double(Teval.N_out));
+
+        if ~all(tf)
+            error('Could not match all N_out values.');
+        end
+
+        evalFA = ...
+            double(Teval.MeanEvaluations_FA(loc));
+
+        evalBE = ...
+            double(Teval.MeanEvaluations_BE(loc));
+
+    elseif isfield(Sres,'Tsummary')
+
+        % Compatibility with the previous Experiment-2 result file.
+        Teval = Sres.Tsummary;
+
+        requiredEvalVars = { ...
+            'N_out', ...
+            'RAR_FTS_Evaluations_Mean', ...
+            'RAR_BTS_Evaluations_Mean'};
+
+        for k = 1:numel(requiredEvalVars)
+
+            if ~ismember(requiredEvalVars{k}, ...
+                    Teval.Properties.VariableNames)
+
+                error( ...
+                    'Required variable "%s" not found in Tsummary.', ...
+                    requiredEvalVars{k});
+            end
+        end
+
+        [tf,loc] = ...
+            ismember(Nout,double(Teval.N_out));
+
+        if ~all(tf)
+            error('Could not match all N_out values.');
+        end
+
+        evalFA = ...
+            double(Teval.RAR_FTS_Evaluations_Mean(loc));
+
+        evalBE = ...
+            double(Teval.RAR_BTS_Evaluations_Mean(loc));
+
+    else
+
+        error([ ...
+            'Could not locate mean evaluation counts in ' ...
+            'Experiment 2 results.']);
+    end
+end
+
+%% Compact upper-axis labels
+
+evalLabels = strings(size(Nout));
+
+for k = 1:numel(Nout)
+
+    faTxt = ...
+        compactEvaluationLabel(evalFA(k));
+
+    beTxt = ...
+        compactEvaluationLabel(evalBE(k));
+
+    evalLabels(k) = ...
+        faTxt + " / " + beTxt;
+end
+
+%% Colors
+
+cBlue   = [0.0000 0.4470 0.7410];
+cRed    = [0.8500 0.3250 0.0980];
+cPurple = [0.4940 0.1840 0.5560];
+
+% Slightly lighter colors to reveal near-overlapping curves.
+cYellow = [0.96 0.78 0.30];
+cGreen  = [0.58 0.75 0.35];
+
+%% Figure
+
+fig2 = figure( ...
+    'Name','Experiment 2 - Robustness', ...
+    'NumberTitle','off', ...
+    'Color','w', ...
+    'Visible','on', ...
+    'Units','inches', ...
+    'Position',[1 1 3.45 3.24]);
+
+ax2 = axes('Parent',fig2);
+
+% Preserve the final tuned axes position.
+ax2.Position = [0.16 0.15 0.78 0.72];
+
+hold(ax2,'on');
+grid(ax2,'on');
+box(ax2,'on');
+
+%% Curves
+
+% No Selection: blue, solid
+p1 = plot( ...
+    ax2,Nout,yNoSelection, ...
+    '-o', ...
+    'Color',cBlue, ...
+    'LineWidth',1.8, ...
+    'MarkerSize',9, ...
+    'MarkerFaceColor','none', ...
+    'MarkerEdgeColor',cBlue);
+
+% RAR-FA: red, dotted
+p2 = plot( ...
+    ax2,Nout,yFA, ...
+    ':s', ...
+    'Color',cRed, ...
+    'LineWidth',2.0, ...
+    'MarkerSize',9, ...
+    'MarkerFaceColor','none', ...
+    'MarkerEdgeColor',cRed);
+
+% RAR-BE: yellow, solid
+p3 = plot( ...
+    ax2,Nout,yBE, ...
+    '-d', ...
+    'Color',cYellow, ...
+    'LineWidth',1.6, ...
+    'MarkerSize',9, ...
+    'MarkerFaceColor','none', ...
+    'MarkerEdgeColor',cYellow);
+
+% RAR-FA (exact): purple, solid
+p4 = plot( ...
+    ax2,Nout,yFAef, ...
+    '-s', ...
+    'Color',cPurple, ...
+    'LineWidth',1.8, ...
+    'MarkerSize',9, ...
+    'MarkerFaceColor','w', ...
+    'MarkerEdgeColor',cPurple);
+
+% RAR-BE (exact): green, dotted
+p5 = plot( ...
+    ax2,Nout,yBEef, ...
+    ':d', ...
+    'Color',cGreen, ...
+    'LineWidth',1.8, ...
+    'MarkerSize',10, ...
+    'MarkerFaceColor','w', ...
+    'MarkerEdgeColor',cGreen);
+
+%% Main axes
+
+xlabel( ...
+    ax2,'Number of outliers', ...
+    'FontName','Times New Roman', ...
+    'FontSize',14);
+
+ylabel( ...
+    ax2,'Position RMSE [m]', ...
+    'Interpreter','tex', ...
+    'FontName','Times New Roman', ...
+    'FontSize',14);
+
+xticks(ax2,Nout);
+xticklabels(ax2,string(Nout));
+
+xlim(ax2,[min(Nout)-0.2 max(Nout)+0.2]);
+
+allY = [ ...
+    yNoSelection(:); ...
+    yFA(:); ...
+    yBE(:); ...
+    yFAef(:); ...
+    yBEef(:)];
+
+ymax = max(allY);
+ylim(ax2,[0 ymax+0.4]);
+
+set( ...
+    ax2, ...
+    'FontName','Times New Roman', ...
+    'FontSize',11, ...
+    'LineWidth',1.0, ...
+    'GridAlpha',0.22, ...
+    'TickDir','in', ...
+    'Layer','top');
+
+%% Legend
+
+lg2 = legend( ...
+    ax2, ...
+    [p1 p2 p3 p4 p5], ...
+    { ...
+    'No Selection', ...
+    'RAR-FA', ...
+    'RAR-BE', ...
+    'RAR-FA (exact)', ...
+    'RAR-BE (exact)'}, ...
+    'Location','northwest', ...
+    'Box','off', ...
+    'FontName','Times New Roman', ...
+    'FontSize',8);
+
+lg2.ItemTokenSize = [12 7];
+
+%% Top x-axis: mean candidate-subset evaluations
+
+axTop = axes( ...
+    'Parent',fig2, ...
+    'Position',ax2.Position, ...
+    'Color','none', ...
+    'XAxisLocation','top', ...
+    'YAxisLocation','right', ...
+    'XLim',ax2.XLim, ...
+    'YLim',ax2.YLim, ...
+    'XTick',Nout, ...
+    'XTickLabel',evalLabels, ...
+    'YTick',[], ...
+    'Box','off', ...
+    'FontName','Times New Roman', ...
+    'FontSize',9, ...
+    'LineWidth',1.0, ...
+    'TickDir','in');
+
+axTop.YColor = 'none';
+axTop.XColor = 'k';
+
+hTop = xlabel( ...
+    axTop,'Mean evaluations [FA / BE]', ...
+    'FontName','Times New Roman', ...
+    'FontSize',10, ...
+    'Color','k');
+
+hTop.Units = 'normalized';
+hTop.Position = [0.5 1.10 0];
+
+linkaxes([ax2 axTop],'x');
+
+%% Export
+
+robustPNG = ...
+    fullfile(outDir,'experiment2_robustness_rmse.png');
+
+robustPDF = ...
+    fullfile(outDir,'experiment2_robustness_rmse.pdf');
+
+robustFIG = ...
+    fullfile(outDir,'experiment2_robustness_rmse.fig');
+
+drawnow;
+
+exportgraphics( ...
+    fig2,robustPNG, ...
+    'Resolution',400);
+
+exportgraphics( ...
+    fig2,robustPDF, ...
+    'ContentType','vector');
+
+savefig(fig2,robustFIG);
+
+close(fig2);
+
+%% ========================================================================
+% Final report
+% ========================================================================
+
+fprintf('\n');
+fprintf('============================================================\n');
+fprintf('EXPERIMENT 2 FIGURES GENERATED\n');
+fprintf('============================================================\n');
+
+fprintf('Selection relevance:\n');
+fprintf('  %s\n',selectionPDF);
+
+fprintf('Robustness:\n');
+fprintf('  %s\n',robustPDF);
+
+fprintf('\nRandom subsets : %d\n',N_random);
+fprintf('Subset size    : K=%d\n',K);
+
+fprintf('\nMean candidate-subset evaluations:\n');
+
+for k = 1:numel(Nout)
+
+    fprintf( ...
+        '  N_out=%d -> FA=%.4f, BE=%.4f\n', ...
+        Nout(k), ...
+        evalFA(k), ...
+        evalBE(k));
+end
+
+fprintf('============================================================\n');
+
+%% ========================================================================
+% Local function
+% ========================================================================
+
+function txt = compactEvaluationLabel(value)
+
+    if value >= 10000
+
+        txt = sprintf('%.1fk',value/1000);
+
+    elseif value >= 1000
+
+        txt = sprintf('%.2fk',value/1000);
+
+    else
+
+        txt = sprintf('%.0f',value);
+    end
+end
