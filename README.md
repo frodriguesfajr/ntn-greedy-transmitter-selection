@@ -10,7 +10,7 @@ This repository contains the MATLAB implementation used to reproduce the nominal
 2. selection relevance and robustness to impulsive pseudorange errors;
 3. HAPS availability and LEO compensation.
 
-The public workflow uses portable MATLAB code, archived TLEs, the included Vallado SGP4 implementation, and a portable ITU-R P.2145/P.676 atmospheric model. The main pipeline does **not** require Aerospace Toolbox, Satellite Communications Toolbox, or STK.
+The public workflow uses portable MATLAB code, archived TLEs, the included Vallado SGP4 implementation, and a portable ITU-R P.2145/P.676 atmospheric model.
 
 ---
 
