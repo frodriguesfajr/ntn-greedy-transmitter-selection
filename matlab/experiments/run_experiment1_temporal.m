@@ -1272,3 +1272,4 @@ function [alphaCRB_m,PDOP,rankH] = ...
         alphaCRB_m = sqrt(trPos);
     end
 end
+
