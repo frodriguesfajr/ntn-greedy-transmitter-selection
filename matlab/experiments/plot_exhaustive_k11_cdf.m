@@ -55,8 +55,12 @@ x = a(lastOfTie);
 F = double(lastOfTie)/N;
 clear a lastOfTie;
 
+% Filipe: mesmo tamanho fisico da versao compacta.
+targetW_cm = 235/72*2.54;   % 8.2903 cm
+targetH_cm = 8.30;          % Filipe: altura aumentada para alinhar visualmente com Fig. 2(b)
+
 fig = figure('Color','w','Units','centimeters', ...
-    'Position',[2 2 14 9]);
+    'Position',[2 2 targetW_cm targetH_cm]);
 ax = axes(fig,'Position',[0.15 0.19 0.81 0.76]);
 hold(ax,'on');
 set(ax,'YScale','log','FontName','Times New Roman', ...
@@ -77,8 +81,9 @@ xlim(ax,[min(x(1),0.6)-0.04 x(end)+0.04]);
 ylim(ax,[0.65/N 1.25]);
 yticks(ax,10.^(-7:0));
 grid(ax,'on'); ax.GridAlpha=0.16;
-xlabel(ax,'$\alpha_{\mathrm{CRB}}$ (m)','Interpreter','latex');
-ylabel(ax,'CDF (log scale)','Interpreter','latex');
+% xlabel(ax,'$\alpha_{\mathrm{CRB}}$ (m)','Interpreter','latex');
+xlabel(ax,'Position bound (m)');
+ylabel(ax,'CDF (log scale)');
 legend(ax,[c t m],{'All K = 11 subsets','Target: 0.6 m',methodLabel}, ...
     'Location','southeast','Box','off','Interpreter','none', ...
     'FontSize',10);
@@ -93,12 +98,19 @@ text(ax,0.36,0.38,note,'Units','normalized', ...
 drawnow;
 
 % Existing exports with these names are replaced when rerunning.
+
 base = fullfile(outDir,'fig_exhaustive_K11_cdf');
+
+% Filipe: fixa o mesmo tamanho fisico da versao compacta.
+set(fig,'PaperUnits','centimeters', ...
+    'PaperPositionMode','manual', ...
+    'PaperPosition',[0 0 targetW_cm targetH_cm], ...
+    'PaperSize',[targetW_cm targetH_cm]);
+
 fprintf('Exporting PNG and PDF...\n');
-exportgraphics(fig,[base '.png'],'Resolution',600, ...
-    'BackgroundColor','white');
-exportgraphics(fig,[base '.pdf'],'ContentType','image', ...
-    'Resolution',600,'BackgroundColor','white');
+
+print(fig,[base '.png'],'-dpng','-r600');
+print(fig,[base '.pdf'],'-dpdf','-r600');
 % Optional editable FIG (large, since it contains all CDF points):
 % savefig(fig,[base '.fig']);
 fprintf('FTS/BTE bound: %.15f m\n',fa);
@@ -107,28 +119,36 @@ fprintf('Feasible with stored tolerance: %d\n',nTargetTol);
 fprintf('CDF COMPLETE. Outputs:\n%s.png\n%s.pdf\n',base,base);
 
 %% Formato final para o paper
-xlim(ax,[0.58 1.20]);
-xticks(ax,0.6:0.1:1.2);
-ylim(ax,[5e-8 1.25]);
+% Filipe: dimensoes e tipografia ajustadas para coincidir visualmente
+% com experiment2_robustness_rmse.pdf.
 
-set(ax,'Position',[0.17 0.20 0.79 0.75], ...
-    'FontSize',9);
+targetW_cm = 235/72*2.54;
+targetH_cm = 8.80;
 
-ax.XLabel.FontSize = 10;
-ax.YLabel.FontSize = 10;
+set(fig,'Units','centimeters', ...
+    'Position',[2 2 targetW_cm targetH_cm]);
+
+% Filipe: margem esquerda aumentada para evitar corte do ylabel.
+set(ax,'Position',[0.27 0.14 0.68 0.83], ...
+    'FontName','Times New Roman', ...
+    'FontSize',11);
+
+ax.XLabel.FontSize = 12;
+ax.YLabel.FontSize = 12;
 
 lgd = legend(ax);
+lgd.FontName = 'Times New Roman';
 lgd.FontSize = 8;
 lgd.Location = 'southeast';
 
-set(findobj(ax,'Type','text'),'FontSize',8);
-
 set(fig,'PaperUnits','centimeters', ...
     'PaperPositionMode','manual', ...
-    'PaperPosition',[0 0 8.8 6.5], ...
-    'PaperSize',[8.8 6.5]);
+    'PaperPosition',[0 0 targetW_cm targetH_cm], ...
+    'PaperSize',[targetW_cm targetH_cm]);
 
 drawnow;
 
-print(fig,[base '_compact.png'],'-dpng','-r600');
-print(fig,[base '_compact.pdf'],'-dpdf','-r600');
+baseCompact = fullfile(outDir,'fig_exhaustive_K11_cdf_compact');
+
+print(fig,[baseCompact '.png'],'-dpng','-r600');
+print(fig,[baseCompact '.pdf'],'-dpdf','-r600');
